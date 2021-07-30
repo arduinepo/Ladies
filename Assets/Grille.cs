@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace Assets
 {
     //Collection de tous les mouvements et prises uniques par pion possibles
     //1 : passer en matrice 1D
     //2 : passer en matrice 1D sans les cases injouables
+
+    //doubler méthodes de recherche d'action suivant noirs ou blancs pour diminuer nombre de if
 
     public class Grille
     {
@@ -25,7 +28,8 @@ namespace Assets
 
         static Case[,] GRILLE_CASES;
 
-        const short HAUT_GAUCHE = 1, HAUT_DROIT = 2, BAS_DROIT = 3, BAS_GAUCHE = 4, HAUT = -1, GAUCHE = -1, BAS = 1, DROITE = 1;
+        const byte HAUT_GAUCHE = 1, HAUT_DROIT = 2, BAS_DROIT = 3, BAS_GAUCHE = 4;
+        const short HAUT = -1, GAUCHE = -1, BAS = 1, DROITE = 1;
         const short PION_BLANC = 1, PION_NOIR = -1, DAME_BLANC = 2, DAME_NOIR = -2, VIDE = 0;
         const bool TOUR_BLANCS = true, TOUR_NOIRS = false;
 
@@ -162,6 +166,61 @@ namespace Assets
                 (c.ligne == 0 && grille[c.ligne, c.colonne] == PION_BLANC);
         }
 
+        /*Génère tous les mouvements possibles dans le configuration courante suivant le tour des joueurs :
+        * parcourt les cases voisines immédiates des pions simples, et les cases situées sur les diagonales des dames.
+        */
+        void mouvementsPossibles()
+        {
+            if (tour == TOUR_BLANCS)
+            {
+                for (byte i = 0; i < grille.Length; i++)
+                    for (byte j = (byte)((i % 2 == 0) ? 0 : 1); j < grille.Length; j += 2)
+                        if (grille[i, j] == PION_BLANC)
+                            for (short pos = HAUT_GAUCHE; pos <= HAUT_DROIT; pos++)
+                            {
+                                byte l = getLigneVoisine(i, pos), c = getColonneVoisine(j, pos);
+                                if (l >= 0 && l < grille.Length && c >= 0 && c < grille.Length && grille[l, c] == VIDE)
+                                    actionsPossibles.Add(new Mouvement(i, j, l, c));
+                            }
+                        else if (grille[i, j] == DAME_BLANC)
+                            for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
+                            {
+                                byte ligne = getLigneVoisine(i, pos), col = getColonneVoisine(j, pos);
+                                while (ligne >= 0 && ligne < grille.Length && col >= 0 && col < grille.Length
+                                && grille[ligne, col] == VIDE)
+                                {
+                                    actionsPossibles.Add(new Mouvement(i, j, ligne, col));
+                                    ligne = getLigneVoisine(ligne, pos);
+                                    col = getColonneVoisine(col, pos);
+                                }
+                            }
+            }
+            else
+            {
+                for (byte i = 0; i < grille.Length; i++)
+                    for (byte j = (byte)((i % 2 == 0) ? 0 : 1); j < grille.Length; j += 2)
+                        if (grille[i, j] == PION_NOIR)
+                            for (short pos = BAS_GAUCHE; pos <= BAS_DROIT; pos++)
+                            {
+                                byte l = getLigneVoisine(i, pos), c = getColonneVoisine(j, pos);
+                                if (l >= 0 && l < grille.Length && c >= 0 && c < grille.Length && grille[l, c] == VIDE)
+                                    actionsPossibles.Add(new Mouvement(i, j, l, c));
+                            }
+                        else if (grille[i, j] == DAME_NOIR)
+                            for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
+                            {
+                                byte ligne = getLigneVoisine(i, pos), col = getColonneVoisine(j, pos);
+                                while (ligne >= 0 && ligne < grille.Length && col >= 0 && col < grille.Length
+                                && grille[ligne, col] == VIDE)
+                                {
+                                    actionsPossibles.Add(new Mouvement(i, j, ligne, col));
+                                    ligne = getLigneVoisine(ligne, pos);
+                                    col = getColonneVoisine(col, pos);
+                                }
+                            }
+            }
+        }
+
         /* Génère toutes les prises possibles de tous les pions du joueur qui a le tour. */
         void prises()
         {
@@ -260,67 +319,117 @@ namespace Assets
                         if (p is PriseDame) {
                             p2 = (PriseDame)p;
                             if(p1.prendMemePionsMemeOrdre(p2))
-                                prises.Add(p2);
+                                prises.RemoveAt(j);
                         }
                     }
                 }
-                    
             }
-            actionsPossibles = actionsPossibles.filter(p => !prises.includes(p));
         }
 
-        /*Génère tous les mouvements possibles dans le configuration courante suivant le tour des joueurs :
-    * parcourt les cases voisines immédiates des pions simples, et les cases situées sur les diagonales des dames.
-    */
-        void mouvementsPossibles()
+        bool caseOccupeeParAdversaire(short pion, byte ligneCase, byte colCase)
         {
-            if (this.tourBlanc === BLANC)
+           short pionCase = grille[ligneCase,colCase];
+           return (pion < 0 && pionCase > 0) || (pion > 0 && pionCase < 0);
+        }
+
+        bool caseApresSautLibreOuContientPionPreneur(Prise p, byte l, byte c, short pos)
+        {
+            byte ligne = getLigneVoisine(l, pos), col = getColonneVoisine(c, pos);
+            if (ligne < 0 || ligne >= grille.Length || col < 0 || col >= grille.Length)
+                return false;
+            return grille[ligne,col] == VIDE || (ligne == p.ligneDepart() && col == p.colonneDepart());
+        }
+
+        bool peutEtendrePrise(Prise p, short positionCase)
+        {
+            Case c = p.cazArrivee();
+            byte l = c.ligne, co = c.colonne;
+            return contientPionAdverse(grille[p.ligneDepart(),p.colonneDepart()], l, co,
+                positionCase) && this.caseApresSautLibreOuContientPionPreneur(p, this.getLigneVoisine(l, positionCase), this.getColonneVoisine(co, positionCase), positionCase);
+        }
+
+        bool contientPionAdverse(short pion, byte ligne, byte col, short position)
+        {
+            switch (position)
             {
-                for (let i = 0; i < this.grille.length; i++)
-                    for (let j = (i % 2 === 0) ? 0 : 1; j < this.grille.length; j = j + 2)
-                        if (this.grille[i][j] === PION_BLANC)
-                            for (let pos = HAUT_GAUCHE; pos <= HAUT_DROIT; pos++)
-                            {
-                                let l = this.getLigneVoisine(i, pos), c = this.getColonneVoisine(j, pos);
-                                if (l >= 0 && l < this.grille.length && c >= 0 && c < this.grille.length && this.grille[l][c] === CASE_VIDE)
-                                    this.actionsPossibles.push(new Mouvement(i, j, l, c));
-                            }
-                        else if (this.grille[i][j] === DAME_BLANC)
-                            for (let pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
-                            {
-                                let ligne = this.getLigneVoisine(i, pos), col = this.getColonneVoisine(j, pos);
-                                while (ligne >= 0 && ligne < this.grille.length && col >= 0 && col < this.grille.length
-                                && this.grille[ligne][col] === CASE_VIDE)
-                                {
-                                    this.actionsPossibles.push(new Mouvement(i, j, ligne, col));
-                                    ligne = this.getLigneVoisine(ligne, pos);
-                                    col = this.getColonneVoisine(col, pos);
-                                }
-                            }
+                case (HAUT_GAUCHE):
+                    return ligne + HAUT >= 0 && col + GAUCHE >= 0 && ((pion > 0 && grille[ligne + HAUT,col + GAUCHE] < 0)
+                        || (pion < 0 && grille[ligne + HAUT,col + GAUCHE] > 0));
+                case (HAUT_DROIT):
+                    return ligne + HAUT >= 0 && col + DROITE < this.grille.Length
+                        && ((pion > 0 && grille[ligne + HAUT,col + DROITE] < 0)
+                            || (pion < 0 && grille[ligne + HAUT,col + DROITE] > 0));
+                case (BAS_DROIT):
+                    return ligne + BAS < grille.Length && col + DROITE < this.grille.Length
+                        && ((pion > 0 && grille[ligne + BAS,col + DROITE] < 0)
+                            || (pion < 0 && grille[ligne + BAS,col + DROITE] > 0));
+                case (BAS_GAUCHE):
+                    return ligne + BAS < grille.Length && col + GAUCHE >= 0
+                        && ((pion > 0 && grille[ligne + BAS,col + GAUCHE] < 0)
+                            || (pion < 0 && grille[ligne + BAS,col + GAUCHE] > 0));
             }
-            else {
-                for (let i = 0; i < this.grille.length; i++)
-                    for (let j = (i % 2 === 0) ? 0 : 1; j < this.grille.length; j = j + 2)
-                        if (this.grille[i][j] === PION_NOIR)
-                            for (let pos = BAS_GAUCHE; pos <= BAS_DROIT; pos++)
-                            {
-                                let l = this.getLigneVoisine(i, pos), c = this.getColonneVoisine(j, pos);
-                                if (l >= 0 && l < this.grille.length && c >= 0 && c < this.grille.length && this.grille[l][c] === CASE_VIDE)
-                                    this.actionsPossibles.push(new Mouvement(i, j, l, c));
-                            }
-                        else if (this.grille[i][j] === DAME_NOIR)
-                            for (let pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
-                            {
-                                let ligne = this.getLigneVoisine(i, pos), col = this.getColonneVoisine(j, pos);
-                                while (ligne >= 0 && ligne < this.grille.length && col >= 0 && col < this.grille.length
-                                && this.grille[ligne][col] === CASE_VIDE)
-                                {
-                                    this.actionsPossibles.push(new Mouvement(i, j, ligne, col));
-                                    ligne = this.getLigneVoisine(ligne, pos);
-                                    col = this.getColonneVoisine(col, pos);
-                                }
-                            }
+            return false;
+        }
+
+        const byte ERR = 101;
+
+        byte getLigneVoisine(byte ligne, short position)
+        {
+            switch (position)
+            {
+                case (HAUT_GAUCHE):
+                case (HAUT_DROIT):
+                    return (byte)(ligne + HAUT);
+                case (BAS_DROIT):
+                case (BAS_GAUCHE):
+                    return (byte)(ligne + BAS);
             }
+            return ERR;
+        }
+
+        byte getColonneVoisine(byte col, short position)
+        {
+            switch (position)
+            {
+                case (HAUT_GAUCHE):
+                case (BAS_GAUCHE):
+                    return (byte)(col + GAUCHE);
+                case (HAUT_DROIT):
+                case (BAS_DROIT):
+                    return (byte)(col + DROITE);
+            }
+            return ERR;
+        }
+
+        public override String ToString()
+        {
+            StringBuilder s = new StringBuilder(300);
+            for (byte i = 0; i < grille.Length; i++)
+            {
+                for (byte j = 0; j < grille.Length; j++)
+                {
+                    switch (grille[i,j])
+                    {
+                        case (DAME_BLANC):
+                            s.Append(" B ");
+                            break;
+                        case (PION_BLANC):
+                            s.Append(" b ");
+                            break;
+                        case (VIDE):
+                            s.Append(" - ");
+                            break;
+                        case (PION_NOIR):
+                            s.Append(" n ");
+                            break;
+                        case (DAME_NOIR):
+                            s.Append(" N ");
+                            break;
+                    }
+                }
+                s.Append("\n");
+            }
+            return s.ToString();
         }
 
     }
