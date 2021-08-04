@@ -66,7 +66,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Action.cs" />
+    <Compile Include="Assets\Damier.cs" />
     <Compile Include="Assets\Grille.cs" />
+    <Compile Include="Assets\Triangulator.cs" />
     <Reference Include="UnityEngine">
       <HintPath>D:/utils/prog/Unity/2019.4.4f1/Editor/Data/Managed/UnityEngine/UnityEngine.dll</HintPath>
     </Reference>

@@ -25,21 +25,12 @@ namespace Assets
 
         protected Action(byte l, byte c)
         {
-            caseDepart = new Case(l, c);
+            caseDepart = Grille.CASES[l,c];
         }
 
         public abstract Case cazArrivee();
+        public abstract bool realiser(Grille g);
         
-        public byte ligneDepart()
-        {
-            return caseDepart.ligne;
-        }
-
-        public byte colonneDepart()
-        {
-            return caseDepart.colonne;
-        }
-
     }
 
     public class Mouvement : Action
@@ -47,7 +38,7 @@ namespace Assets
         private Case caseArrivee;
 
         public Mouvement(byte l1, byte c1, byte l2, byte c2) :base(l1, c1) { 
-            caseArrivee = new Case(l2, c2);
+            caseArrivee = Grille.CASES[l2,c2];
         }
 
         public override Case cazArrivee()
@@ -55,12 +46,13 @@ namespace Assets
             return caseArrivee;
         }
 
-        byte ligneArrivee() {
-            return caseArrivee.ligne;
-        }
+        public override bool realiser(Grille d)
+        {
+            d.grille[caseArrivee.ligne, caseArrivee.colonne] = d.grille[caseDepart.ligne, caseDepart.colonne];
+            d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
+            return (caseArrivee.ligne == d.grille.Length - 1 && d.grille[caseArrivee.ligne, caseArrivee.colonne] == Grille.PION_NOIR)
+                || (caseArrivee.ligne == 0 && d.grille[caseArrivee.ligne, caseArrivee.colonne] == Grille.PION_BLANC);
 
-        byte colonneArrivee() {
-            return caseArrivee.colonne;
         }
 
     }
@@ -73,13 +65,12 @@ namespace Assets
             cases = new List<Case>();
         }
 
-        public static Prise prise(Prise p, byte l, byte c)
+        public Prise(Prise p, byte l, byte c):base(p.caseDepart.ligne,p.caseDepart.colonne)
         {
-            Prise prise = new Prise(p.caseDepart.ligne, p.caseDepart.colonne);
-            foreach(Case ca in p.cases)
-                prise.cases.Add(new Case(ca.ligne, ca.colonne));
-            prise.cases.Add(new Case(l, c));
-            return prise;
+            cases = new List<Case>();
+            foreach (Case ca in p.cases)
+                cases.Add(Grille.CASES[ca.ligne, ca.colonne]);
+            cases.Add(Grille.CASES[l, c]);
         }
 
         public int nombrePionsPris()
@@ -90,16 +81,6 @@ namespace Assets
         public override Case cazArrivee()
         {
             return this.cases.Count > 0 ? this.cases[this.cases.Count - 1] : this.caseDepart;
-        }
-
-        byte ligneArrivee()
-        {
-            return this.cazArrivee().ligne;
-        }
-
-        byte colonneArrivee()
-        {
-            return this.cazArrivee().colonne;
         }
 
         public bool pionVirtuellementPris(byte l, byte c)
@@ -118,6 +99,37 @@ namespace Assets
             return false;
         }
 
+        public override bool realiser(Grille d)
+        {
+            Case c = null, casePrec = caseDepart;
+            for (int i = 0; i < cases.Count; i++)
+            {
+                c = cases[i];
+                int lignePion = casePrec.ligne > c.ligne ? casePrec.ligne - 1 : c.ligne - 1,
+                        colPion = casePrec.colonne > c.colonne ? casePrec.colonne - 1 : c.colonne - 1;
+                switch (d.grille[lignePion, colPion])
+                {
+                    case Grille.PION_BLANC:
+                        d.nbPionsBlancs--;
+                        break;
+                    case Grille.DAME_BLANC:
+                        d.nbDamesBlancs--;
+                        break;
+                    case Grille.PION_NOIR:
+                        d.nbPionsNoirs--;
+                        break;
+                    case Grille.DAME_NOIR:
+                        d.nbDamesNoirs--; break;
+                }
+                d.grille[lignePion, colPion] = 0;
+                casePrec = c;
+            }
+            d.grille[c.ligne, c.colonne] = d.grille[caseDepart.ligne, caseDepart.colonne];
+            d.grille[caseDepart.ligne, caseDepart.colonne] = 0;
+            return (c.ligne ==d.grille.Length - 1 && d.grille[c.ligne, c.colonne] == Grille.PION_NOIR) ||
+                (c.ligne == 0 && d.grille[c.ligne, c.colonne] == Grille.PION_BLANC);
+
+        }
     }
 
     public class PriseDame : Prise
@@ -139,13 +151,8 @@ namespace Assets
             return false;
         }
 
-        public new static PriseDame prise(Prise p, byte l, byte c)
+        public PriseDame(Prise p, byte l, byte c):base(p,l,c)
         {
-            PriseDame prise = new PriseDame(p.caseDepart.ligne, p.caseDepart.colonne);
-            foreach (Case ca in p.cases)
-                prise.cases.Add(new Case(ca.ligne, ca.colonne));
-            prise.cases.Add(new Case(l, c));
-            return prise;
         }
 
         public bool prendMemePionsMemeOrdre(Prise prise)
@@ -158,6 +165,33 @@ namespace Assets
             {
             }
             return i == this.cases.Count;
+        }
+
+        public override bool realiser(Grille d)
+        {
+            Case c = null;
+            for (int i = 0; i < cases.Count; i += 2)
+            {
+                c = cases[i];
+                switch (d.grille[c.ligne, c.colonne])
+                {
+                    case Grille.PION_BLANC:
+                        d.nbPionsBlancs--;
+                        break;
+                    case Grille.DAME_BLANC:
+                        d.nbDamesBlancs--;
+                        break;
+                    case Grille.PION_NOIR:
+                        d.nbPionsNoirs--;
+                        break;
+                    case Grille.DAME_NOIR:
+                        d.nbDamesNoirs--; break;
+                }
+                d.grille[c.ligne, c.colonne] = 0;
+            }
+            d.grille[c.ligne, c.colonne] = d.grille[caseDepart.ligne, caseDepart.colonne];
+            d.grille[caseDepart.ligne, caseDepart.colonne] = 0;
+            return false;
         }
     }
 }
