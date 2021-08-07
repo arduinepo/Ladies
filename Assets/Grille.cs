@@ -4,12 +4,12 @@ using System.Text;
 
 namespace Assets
 {
-
     //Collection de tous les mouvements et prises uniques par pion possibles
+
+    //refaire géné prises
+    //doubler méthodes de recherche d'action suivant noirs ou blancs pour diminuer nombre de if
     //1 : passer en matrice 1D
     //2 : passer en matrice 1D sans les cases injouables
-
-    //doubler méthodes de recherche d'action suivant noirs ou blancs pour diminuer nombre de if
 
     public class Grille
     {
@@ -37,10 +37,11 @@ namespace Assets
         protected const int NUL = 0, VICTOIRE_BLANC = -1, VICTOIRE_NOIR = 1;
 
         public int[,] grille;
+        public List<Case> pionsBlancs, pionsNoirs, damesBlancs, damesNoirs;
         protected bool tour;
         public int nbPionsBlancs, nbPionsNoirs, nbDamesBlancs, nbDamesNoirs;
-
-        protected List<Action> actionsPossibles;
+        public List<Action> actionsPossibles;
+        private int maxPionsPris;
         #endregion
 
         static Grille()
@@ -80,6 +81,18 @@ namespace Assets
         {
             grille = (int[,])GRILLE_10.Clone();
             tour = TOUR_BLANCS;
+            pionsBlancs = new List<Case>(20);
+            pionsNoirs = new List<Case>(20);
+            damesBlancs = new List<Case>(10);
+            damesNoirs = new List<Case>(10);
+            for (byte i = 0; i < 10; i++)
+                for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
+                {
+                    if (j < 4)
+                        pionsNoirs[nbPionsNoirs++] = CASES[i, j];
+                    if (j > 5)
+                        pionsBlancs[nbPionsBlancs++] = CASES[i, j];
+                }
             nbPionsBlancs = nbPionsNoirs = 20;
             nbDamesBlancs = nbDamesNoirs = 0;
         }
@@ -98,11 +111,20 @@ namespace Assets
         {
             actionsPossibles = new List<Action>();
             prises();
-            mouvementsPossibles();
+            if(actionsPossibles.Count==0)
+                mouvementsPossibles();
+        }
+
+        public Action realiseActionCases(Case c1,Case c2)
+        {
+            foreach (Action a in actionsPossibles)
+                if (a.depart() == c1 && a.contient(c2))
+                    return realiserAction(a);
+            return null;
         }
 
         /* Réalise l'action a, et promeut le pion en dame si nécessaire. Bascule le tour des joueurs.*/
-        protected void realiserAction(Action a)
+        public Action realiserAction(Action a)
         {
             if (a.realiser(this))
             {
@@ -110,6 +132,7 @@ namespace Assets
                 ennoblir(c.ligne, c.colonne);
             }
             tour = !this.tour;
+            return a;
         }
 
         protected byte nombrePionsJoueur(bool blancs)
@@ -159,12 +182,18 @@ namespace Assets
             if (grille[l, c] == PION_BLANC)
             {
                 grille[l, c] = DAME_BLANC;
+                Case ca = CASES[l, c];
+                pionsBlancs.Remove(ca);
+                damesBlancs.Add(ca);
                 nbPionsBlancs--;
                 nbDamesBlancs++;
             }
             else
             {
                 grille[l, c] = DAME_NOIR;
+                Case ca = CASES[l, c];
+                pionsNoirs.Remove(ca);
+                damesNoirs.Add(ca);
                 nbPionsNoirs--;
                 nbDamesNoirs++;
             }
@@ -218,6 +247,7 @@ namespace Assets
         /* Génère toutes les prises possibles de tous les pions du joueur qui a le tour. */
         void prises()
         {
+            maxPionsPris = 0;
             if (tour == TOUR_BLANCS)
             {
                 for (byte i = 0; i < grille.Length; i++)
@@ -247,7 +277,7 @@ namespace Assets
                 Prise p = prisesEnCours[0];
                 prisesEnCours.RemoveAt(0);
                 prisesEnCours.AddRange(etendrePrise(p));
-                prisesEtendues.Add(p);
+                //prisesEtendues.Add(p);
             } while (prisesEnCours.Count > 0);
             prisesEtendues.RemoveAt(0);
             actionsPossibles.AddRange(prisesEtendues);
@@ -263,7 +293,7 @@ namespace Assets
         {
             List<Prise> prises = new List<Prise>();
             Case c = p.cazArrivee();
-            int l = p.caseDepart.ligne, co = p.caseDepart.colonne;
+            int l = p.cases[0].ligne, co = p.cases[0].colonne;
             int ligneArrivee = c.ligne, colArrivee = c.colonne;
             if (p is PriseDame)
             {
@@ -284,6 +314,7 @@ namespace Assets
                                     && caseApresSautLibreOuContientPionPreneur(p, ligne, col, position)
                                     && !p.pionVirtuellementPris(ligne, col))
                                     priseD = new PriseDame(p, ligne, col);
+                                    
                                 else
                                     secondPionNonRencontre = false;
                             }
@@ -291,7 +322,14 @@ namespace Assets
                                 secondPionNonRencontre = false;
                         }
                         else if (!premierPionNonRencontre && priseD != null)
-                            prises.Add(new Prise(priseD, ligne, col));
+                        {
+                            PriseDame p1 = new PriseDame(priseD, ligne, col);
+                            prises.Add(p1);
+                            int n = p1.nombrePionsPris();
+                            if (n > maxPionsPris)
+                                maxPionsPris = n;
+                        }
+                            
                     }
                 }
             }
@@ -299,8 +337,15 @@ namespace Assets
                 {
                     byte ligne = getLigneVoisine(ligneArrivee, position), col = getColonneVoisine(colArrivee, position);
                     if (peutEtendrePrise(p, position) && !p.pionVirtuellementPris(ligne, col))
-                        prises.Add(new Prise(p, getLigneVoisine(ligne, position), getColonneVoisine(col, position)));
+                    {
+                        Prise p1 = new Prise(p, getLigneVoisine(ligne, position), getColonneVoisine(col, position));
+                        prises.Add(p1);
+                        int n = p1.nombrePionsPris();
+                        if (n > maxPionsPris)
+                            maxPionsPris = n;
+                    }
                 }
+            
             return prises;
         }
 
@@ -340,12 +385,12 @@ namespace Assets
             byte ligne = getLigneVoisine(l, pos), col = getColonneVoisine(c, pos);
             if (ligne < 0 || ligne >= grille.Length || col < 0 || col >= grille.Length)
                 return false;
-            return grille[ligne, col] == VIDE || (ligne == p.caseDepart.ligne && col == p.caseDepart.colonne);
+            return grille[ligne, col] == VIDE || (ligne == p.cases[0].ligne && col == p.cases[0].colonne);
         }
 
         bool peutEtendrePrise(Prise p, short positionCase)
         {
-            Case c = p.cazArrivee(), c2 = p.caseDepart;
+            Case c = p.cazArrivee(), c2 = p.cases[0];
             byte l = c.ligne, co = c.colonne;
             return contientPionAdverse(grille[c2.ligne, c2.colonne], l, co,
                 positionCase) && caseApresSautLibreOuContientPionPreneur(p, getLigneVoisine(l, positionCase), getColonneVoisine(co, positionCase), positionCase);
