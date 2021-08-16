@@ -22,9 +22,8 @@ namespace Assets
     public interface Action
     {
         Case cazArrivee();
-        Case depart();
         bool realiser(Grille g);
-        bool contient(Case a);
+        bool commenceEtPasse(Case a1, Case a2);
 
     }
 
@@ -38,16 +37,6 @@ namespace Assets
             caseArrivee = Grille.CASES[l2, c2];
         }
 
-        public Case depart()
-        {
-            return caseDepart;
-        }
-
-        public bool contient(Case a)
-        {
-            return a == caseDepart || a == caseArrivee;
-        }
-
         public Case cazArrivee()
         {
             return caseArrivee;
@@ -55,11 +44,31 @@ namespace Assets
 
         public bool realiser(Grille d)
         {
-            d.grille[caseArrivee.ligne, caseArrivee.colonne] = d.grille[caseDepart.ligne, caseDepart.colonne];
+            int pion=d.grille[caseArrivee.ligne, caseArrivee.colonne] = d.grille[caseDepart.ligne, caseDepart.colonne];
             d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
+            switch (pion)
+            {
+                case (Grille.PION_BLANC):
+                    d.pionsBlancs.Remove(Grille.CASES[caseDepart.ligne, caseDepart.colonne]);
+                    d.pionsBlancs.Add(Grille.CASES[caseArrivee.ligne, caseArrivee.colonne]); break;
+                case (Grille.PION_NOIR):
+                    d.pionsNoirs.Remove(Grille.CASES[caseDepart.ligne, caseDepart.colonne]);
+                    d.pionsNoirs.Add(Grille.CASES[caseArrivee.ligne, caseArrivee.colonne]); break;
+                case (Grille.DAME_BLANC):
+                    d.damesBlancs.Remove(Grille.CASES[caseDepart.ligne, caseDepart.colonne]);
+                    d.damesBlancs.Add(Grille.CASES[caseArrivee.ligne, caseArrivee.colonne]); break;
+                case (Grille.DAME_NOIR):
+                    d.damesNoirs.Remove(Grille.CASES[caseDepart.ligne, caseDepart.colonne]);
+                    d.damesNoirs.Add(Grille.CASES[caseArrivee.ligne, caseArrivee.colonne]); break;
+            }
             return (caseArrivee.ligne == d.grille.Length - 1 && d.grille[caseArrivee.ligne, caseArrivee.colonne] == Grille.PION_NOIR)
                 || (caseArrivee.ligne == 0 && d.grille[caseArrivee.ligne, caseArrivee.colonne] == Grille.PION_BLANC);
 
+        }
+
+        public bool commenceEtPasse(Case a1,Case a2)
+        {
+            return a1 == caseDepart && a2 == caseArrivee;
         }
 
     }
@@ -87,11 +96,6 @@ namespace Assets
             return cases.Count / 2;
         }
 
-        public Case depart()
-        {
-            return cases[0];
-        }
-        
         public Case cazArrivee()
         {
             return cases[cases.Count - 1];
@@ -133,9 +137,16 @@ namespace Assets
                 (c.ligne == 0 && d.grille[c.ligne, c.colonne] == Grille.PION_BLANC);
         }
 
-        public bool contient(Case a)
+        public bool commenceEtPasse(Case a1,Case a2)
         {
-            return cases.Contains(a);
+            if (a1 == cases[0])
+            {
+                for (int i = 1; i < cases.Count; i++)
+                    if (a2.equals(cases[i]))
+                        return true;
+                return false;
+            }
+            return false;
         }
 
     }
