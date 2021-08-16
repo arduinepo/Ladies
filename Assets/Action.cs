@@ -77,6 +77,14 @@ namespace Assets
     {
         public List<Case> cases;
 
+        public Prise(Case c1,Case c2)
+        {
+            cases = new List<Case>();
+            cases.Add(c1);
+            cases.Add(c2);
+        }
+
+
         public Prise(byte l1, byte c1)
         {
             cases = new List<Case>();

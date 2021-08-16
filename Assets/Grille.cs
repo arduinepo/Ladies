@@ -266,7 +266,7 @@ namespace Assets
             if (tour == TOUR_BLANCS)
             {
                 foreach (Case c in pionsBlancs)
-                    prisesPion(c.ligne, c.colonne);
+                    prisesPionBlanc(c.ligne, c.colonne);
                 foreach(Case c in damesBlancs)
                     prisesPion(c.ligne, c.colonne);
             }
@@ -283,9 +283,48 @@ namespace Assets
         /* Génère toutes les prises possibles d'un pion. */
 
         // OPTI
-        void prisesPion(byte ligne, byte colonne)
+        void prisesPionBlanc(byte l, byte co)
         {
-            List<Prise> prisesEnCours = new List<Prise>(), prisesEtendues = new List<Prise>();
+            Queue<Prise> prises = new Queue<Prise>();
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++) {
+                byte ligne = getLigneVoisine(l, position), col = getColonneVoisine(co, position);
+                if (grille[ligne,col]<0 && caseApresSautLibre(l, co, ligne, col, position))
+                {
+                    Prise p = new Prise(CASES[l,co],CASES[ligne,col]);
+                    prises.Enqueue(p);
+                    while (prises.Count > 0)
+                    {
+                        Prise p2 = prises.Dequeue();
+                        bool poursuivie = false;
+                        for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                        {
+                            Case c = caseVoisine(p2.cazArrivee(), pos2);
+                            if(grille[c.ligne,c.colonne]<0&&caseApresSautLibreOuContientPionPreneur(p2,c.ligne,c.colonne,pos2))
+                            {
+                                if (!poursuivie)
+                                {
+                                    p2.cases.Add(c);
+                                    p2.cases.Add(caseVoisine(c, pos2));
+                                    prises.Enqueue(p2);
+                                    // amputer p2 des 2 dernières cases pour copies des autres adjacentes
+                                    poursuivie = true;
+                                }
+                                else
+                                {
+                                    Prise p3 = new Prise(p2, c.ligne, c.colonne);
+                                    p3.cases.Add(caseVoisine(c, pos2));
+                                    prises.Enqueue(p3);
+                                }
+                            }
+
+
+                        }
+                    }
+                }
+
+            }
+
+                List<Prise> prisesEnCours = new List<Prise>(), prisesEtendues = new List<Prise>();
             if (Math.Abs(grille[ligne, colonne]) == 2)
                 prisesEnCours.Add(new PriseDame(ligne, colonne));
             else prisesEnCours.Add(new Prise(ligne, colonne));
@@ -299,6 +338,18 @@ namespace Assets
             prisesEtendues.RemoveAt(0);
             prisesEtendues.RemoveAll(x => x.nombrePionsPris() < maxPionsPris);
             actionsPossibles.AddRange(prisesEtendues);
+        }
+
+        Case caseVoisine(Case c,int position)
+        {
+            switch (position)
+            {
+                case (HAUT_GAUCHE):return CASES[c.ligne - 1, c.colonne - 1];
+                case (HAUT_DROIT):return CASES[c.ligne - 1, c.colonne + 1];
+                case (BAS_DROIT):return CASES[c.ligne + 1, c.colonne + 1];
+                case (BAS_GAUCHE):return CASES[c.ligne + 1, c.colonne - 1];
+            }
+            return null;
         }
 
         /* Etend la prise p : renvoie toutes les prises résultant de son extension aux pions adverses voisins du pion 
@@ -414,6 +465,12 @@ namespace Assets
             if (ligne < 0 || ligne >= taille || col < 0 || col >= taille)
                 return false;
             return grille[ligne, col] == VIDE || (ligne == p.cases[0].ligne && col == p.cases[0].colonne);
+        }
+
+        bool caseApresSautLibre(byte ld,byte cd, byte l, byte c, short pos)
+        {
+            byte ligne = getLigneVoisine(l, pos), col = getColonneVoisine(c, pos);
+            return (ligne >= 0 && ligne < taille) && (col >= 0 && col < taille) && grille[ligne, col] == VIDE;
         }
 
         bool peutEtendrePrise(Prise p, short positionCase)
