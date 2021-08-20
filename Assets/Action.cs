@@ -42,6 +42,7 @@ namespace Assets
             return caseArrivee;
         }
 
+        // mémoire cases pions grille
         public bool realiser(Grille d)
         {
             int pion=d.grille[caseArrivee.ligne, caseArrivee.colonne] = d.grille[caseDepart.ligne, caseDepart.colonne];
@@ -73,30 +74,27 @@ namespace Assets
 
     }
 
-    public class Prise : Action
+    public class Prise :Action
     {
         public List<Case> cases;
 
-        public Prise(Case c1,Case c2)
+        public Prise(Case c1, Case c2)
         {
             cases = new List<Case>();
             cases.Add(c1);
             cases.Add(c2);
         }
 
-
-        public Prise(byte l1, byte c1)
+        public Prise(Case c1)
         {
             cases = new List<Case>();
-            cases[0] = Grille.CASES[l1, c1];
+            cases.Add(c1);
         }
 
-        public Prise(Prise p, byte l, byte c)
+        public Prise(Prise p, Case c)
         {
-            cases = new List<Case>();
-            foreach (Case ca in p.cases)
-                cases.Add(Grille.CASES[ca.ligne, ca.colonne]);
-            cases.Add(Grille.CASES[l, c]);
+            cases = new List<Case>(p.cases);
+            cases.Add(c);
         }
 
         public int nombrePionsPris()
@@ -117,6 +115,7 @@ namespace Assets
             return false;
         }
 
+        // mémoire cases pions grille
         public bool realiser(Grille d)
         {
             Case c = null;
@@ -145,15 +144,12 @@ namespace Assets
                 (c.ligne == 0 && d.grille[c.ligne, c.colonne] == Grille.PION_BLANC);
         }
 
-        public bool commenceEtPasse(Case a1,Case a2)
+        public bool commenceEtPasse(Case a1, Case a2)
         {
             if (a1 == cases[0])
-            {
                 for (int i = 1; i < cases.Count; i++)
                     if (a2.equals(cases[i]))
                         return true;
-                return false;
-            }
             return false;
         }
 
@@ -161,49 +157,46 @@ namespace Assets
 
     public class PriseDame : Prise
     {
-        public PriseDame(byte l1, byte c1) : base(l1, c1) { }
 
-        public PriseDame(Prise p, byte l, byte c) : base(p, l, c)
+        public PriseDame(PriseDame p, Case c):base(p,c)
         {
         }
 
-        public bool prendMemePionsMemeOrdre(Prise prise)
+        public PriseDame(Case p, Case c) : base(p, c)
         {
-            if (!cases[0].equals(prise.cases[0]) || cases.Count != prise.cases.Count
-                || !cases[cases.Count - 1].equals(prise.cases[prise.cases.Count - 1]))
-                return false;
-            int i = 1;
-            for (; i < cases.Count - 1 && this.cases[i].equals(prise.cases[i]); i += 2)
-            {
-            }
-            return i == this.cases.Count;
         }
 
-        public new bool realiser(Grille d)
+        // mémoire cases pions grille
+        public new bool realiser(Grille g)
         {
             Case c = null;
             for (int i = 1; i < cases.Count; i += 2)
             {
                 c = cases[i];
-                switch (d.grille[c.ligne, c.colonne])
+                switch (g.grille[c.ligne, c.colonne])
                 {
                     case Grille.PION_BLANC:
-                        d.nbPionsBlancs--;
+                        g.nbPionsBlancs--;
                         break;
                     case Grille.DAME_BLANC:
-                        d.nbDamesBlancs--;
+                        g.nbDamesBlancs--;
                         break;
                     case Grille.PION_NOIR:
-                        d.nbPionsNoirs--;
+                        g.nbPionsNoirs--;
                         break;
                     case Grille.DAME_NOIR:
-                        d.nbDamesNoirs--; break;
+                        g.nbDamesNoirs--; break;
                 }
-                d.grille[c.ligne, c.colonne] = 0;
+                g.grille[c.ligne, c.colonne] = 0;
             }
-            d.grille[c.ligne, c.colonne] = d.grille[cases[0].ligne, cases[0].colonne];
-            d.grille[cases[0].ligne, cases[0].colonne] = 0;
+            g.grille[c.ligne, c.colonne] = g.grille[cases[0].ligne, cases[0].colonne];
+            g.grille[cases[0].ligne, cases[0].colonne] = 0;
             return false;
+        }
+
+        internal bool prendMemePionsMemeOrdre(PriseDame p2)
+        {
+            throw new System.NotImplementedException();
         }
     }
 

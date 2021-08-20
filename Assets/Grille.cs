@@ -37,12 +37,15 @@ namespace Assets
         protected const int NUL = 0, VICTOIRE_BLANC = -1, VICTOIRE_NOIR = 1;
 
         public int[,] grille;
-        int taille;
+        public int taille;
         public List<Case> pionsBlancs, pionsNoirs, damesBlancs, damesNoirs;
         protected bool tour;
         public int nbPionsBlancs, nbPionsNoirs, nbDamesBlancs, nbDamesNoirs;
+
         public List<Action> actionsPossibles;
         private int maxPionsPris;
+        private Queue<Prise> prisesEnCours, prisesEtendues;
+        private Queue<PriseDame>prisesDamesEnCours, prisesDamesEtendues;
         #endregion
 
         static Grille()
@@ -262,165 +265,328 @@ namespace Assets
         /* Génère toutes les prises possibles de tous les pions du joueur qui a le tour. */
         void prises()
         {
+            prisesEnCours = new Queue<Prise>();
+            prisesDamesEnCours = new Queue<PriseDame>();
+            prisesEtendues = new Queue<Prise>();
+            prisesDamesEtendues = new Queue<PriseDame>();
             maxPionsPris = 0;
             if (tour == TOUR_BLANCS)
             {
                 foreach (Case c in pionsBlancs)
                     prisesPionBlanc(c.ligne, c.colonne);
                 foreach(Case c in damesBlancs)
-                    prisesPion(c.ligne, c.colonne);
+                    prisesPionNoir(c.ligne, c.colonne);
             }
             else
             {
                 foreach (Case c in pionsNoirs)
-                    prisesPion(c.ligne, c.colonne);
+                    prisesDameBlanc(c.ligne, c.colonne);
                 foreach (Case c in damesNoirs)
-                    prisesPion(c.ligne, c.colonne);
+                    prisesDameNoir(c.ligne, c.colonne);
+            }
+            foreach(Prise p in prisesEtendues)
+            {
+                int n = p.nombrePionsPris();
+                if (n > maxPionsPris)
+                    maxPionsPris = n;
+            }
+            foreach (Prise p in prisesDamesEtendues)
+            {
+                int n = p.nombrePionsPris();
+                if (n > maxPionsPris)
+                    maxPionsPris = n;
+            }
+            foreach (Prise p in prisesEtendues)
+            {
+                if (p.nombrePionsPris() == maxPionsPris)
+                    actionsPossibles.Add(p);
+            }
+            foreach (Prise p in prisesDamesEtendues)
+            {
+                if (p.nombrePionsPris() == maxPionsPris)
+                    actionsPossibles.Add(p);
             }
             triePrisesDames();
         }
 
-        /* Génère toutes les prises possibles d'un pion. */
-
-        // OPTI
-        void prisesPionBlanc(byte l, byte co)
+        void prisesPionBlanc(byte l1, byte c1)
         {
-            Queue<Prise> prises = new Queue<Prise>();
-            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++) {
-                byte ligne = getLigneVoisine(l, position), col = getColonneVoisine(co, position);
-                if (grille[ligne,col]<0 && caseApresSautLibre(l, co, ligne, col, position))
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
+            {
+                byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
+                if (l2 > 0 && l2 < taille-1 && c2 > 0 && c2 < taille-1 && grille[l2, c2] < 0)
                 {
-                    Prise p = new Prise(CASES[l,co],CASES[ligne,col]);
-                    prises.Enqueue(p);
-                    while (prises.Count > 0)
+                    byte l3 = getLigneVoisine(l2, position), c3 = getColonneVoisine(c2, position);
+                    if (grille[l3, c3] == VIDE)
                     {
-                        Prise p2 = prises.Dequeue();
-                        bool poursuivie = false;
-                        for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                        Prise p = new Prise(CASES[l1, c1], CASES[l2, c2]);
+                        p.cases.Add(CASES[l3, c3]);
+                        prisesEnCours.Enqueue(p);
+                        while (prisesEnCours.Count > 0)
                         {
-                            Case c = caseVoisine(p2.cazArrivee(), pos2);
-                            if(grille[c.ligne,c.colonne]<0&&caseApresSautLibreOuContientPionPreneur(p2,c.ligne,c.colonne,pos2))
+                            Prise p2 = prisesEnCours.Dequeue();
+                            bool poursuivie = false;
+                            for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                            {
+                                l2 = getLigneVoisine(l3, pos2);
+                                c2 = getColonneVoisine(c3, pos2);
+                                if (l2 > 0 && l2 < taille-1 && c2 > 0 && c2 < taille-1)
+                                {
+                                    l3 = getLigneVoisine(l2, pos2);
+                                    c3 = getColonneVoisine(c2, pos2);
+                                    if (grille[l2, c2] < 0 && (grille[l3, c3] == VIDE || (l3 == p2.cases[0].ligne && c3 == p2.cases[0].colonne)))
+                                    {
+                                        Case ca = CASES[l2, c2];
+                                        if (!poursuivie)
+                                        {
+                                            p2.cases.Add(ca);
+                                            p2.cases.Add(CASES[l3,c3]);
+                                            prisesEnCours.Enqueue(p2);
+                                            poursuivie = true;
+                                        }
+                                        else
+                                        {
+                                            Prise p3 = new Prise(p2, ca);
+                                            p3.cases.Add(CASES[l3, c3]);
+                                            prisesEnCours.Enqueue(p3);
+                                        }
+                                    }
+                                }
+                            }
+                            if (!poursuivie)
+                                prisesEtendues.Enqueue(p2);
+                        }
+                    }
+                }
+            }
+        }
+
+        void prisesPionNoir(byte l1, byte c1)
+        {
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
+            {
+                byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
+                if (l2 > 0 && l2 < taille - 1 && c2 > 0 && c2 < taille - 1 && grille[l2, c2] > 0)
+                {
+                    byte l3 = getLigneVoisine(l2, position), c3 = getColonneVoisine(c2, position);
+                    if (grille[l3, c3] == VIDE)
+                    {
+                        Prise p = new Prise(CASES[l1, c1], CASES[l2, c2]);
+                        p.cases.Add(CASES[l3, c3]);
+                        prisesEnCours.Enqueue(p);
+                        while (prisesEnCours.Count > 0)
+                        {
+                            Prise p2 = prisesEnCours.Dequeue();
+                            bool poursuivie = false;
+                            for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                            {
+                                l2 = getLigneVoisine(l3, pos2);
+                                c2 = getColonneVoisine(c3, pos2);
+                                if (l2 > 0 && l2 < taille - 1 && c2 > 0 && c2 < taille - 1)
+                                {
+                                    l3 = getLigneVoisine(l2, pos2);
+                                    c3 = getColonneVoisine(c2, pos2);
+                                    if (grille[l2, c2] > 0 && (grille[l3, c3] == VIDE || (l3 == p2.cases[0].ligne && c3 == p2.cases[0].colonne)))
+                                    {
+                                        Case ca = CASES[l2, c2];
+                                        if (!poursuivie)
+                                        {
+                                            p2.cases.Add(ca);
+                                            p2.cases.Add(CASES[l3, c3]);
+                                            prisesEnCours.Enqueue(p2);
+                                            poursuivie = true;
+                                        }
+                                        else
+                                        {
+                                            Prise p3 = new Prise(p2, ca);
+                                            p3.cases.Add(CASES[l3, c3]);
+                                            prisesEnCours.Enqueue(p3);
+                                        }
+                                    }
+                                }
+                            }
+                            if (!poursuivie)
+                                prisesEtendues.Enqueue(p2);
+                        }
+                    }
+                }
+            }
+        }
+
+        void prisesDameBlanc(byte l1, byte c1)
+        {
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
+            {
+                PriseDame prise = null;
+                bool premierPionNonRencontre = true, secondPionNonRencontre = true;
+                bool premiereArrivee = false;
+                for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1,position); 
+                    l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre; 
+                    l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
+                {
+                    if (grille[l2, c2] != VIDE)
+                    {
+                        //
+                        if (premierPionNonRencontre)
+                        {
+                            premierPionNonRencontre = false;
+                            if (grille[l2, c2]<0
+                                && caseApresSautLibre(l1,c1, l2, c2, position))
+                                prise = new PriseDame(CASES[l1, c1], CASES[l2, c2]);
+                            else secondPionNonRencontre = false;
+                        }
+                        else secondPionNonRencontre = false;
+                    }
+                    //
+                    else if (!premierPionNonRencontre && prise != null)
+                    {
+                        if (!premiereArrivee)
+                        {
+                            prise.cases.Add(CASES[l2, c2]);
+                            premiereArrivee = true;
+                        }
+                        else prise = new PriseDame(prise, CASES[l2, c2]);
+                        prisesEnCours.Enqueue(prise);
+                    }
+                }
+
+                while (prisesEnCours.Count > 0)
+                {
+                    PriseDame p2 = prisesDamesEnCours.Dequeue();
+                    bool poursuivie = false;
+
+                    for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                    {
+                        prise = null;
+                        premierPionNonRencontre = true;
+                        secondPionNonRencontre = true;
+                        premiereArrivee = false;
+                        for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
+                            l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre;
+                            l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
+                        {
+                            if (grille[l2, c2] != VIDE)
+                            {
+                                if (premierPionNonRencontre)
+                                {
+                                    premierPionNonRencontre = false;
+                                    if (grille[l2, c2] < 0 && !p2.pionVirtuellementPris(l2, c2)
+                                        && caseApresSautLibreOuContientPionPreneur(p2, l2, c2, position))
+                                    {
+                                        if (!poursuivie)
+                                            p2.cases.Add(CASES[l2, c2]);
+                                        else
+                                        {
+                                            prise = new PriseDame(p2, CASES[l2, c2]);
+                                            poursuivie = true;
+                                        }
+                                    }
+                                    else secondPionNonRencontre = false;
+                                }
+                                else secondPionNonRencontre = false;
+                            }
+                            else if (!premierPionNonRencontre && prise != null)
+                            {
+                                if (!premiereArrivee)
+                                {
+                                    prise.cases.Add(CASES[l2, c2]);
+                                    premiereArrivee = true;
+                                }
+                                else prise = new PriseDame(prise, CASES[l2, c2]);
+                                prisesEnCours.Enqueue(prise);
+                            }
+                        }
+                    }
+                    if (!poursuivie)
+                        prisesEtendues.Enqueue(p2);
+                }
+            }
+        }
+
+        void prisesDameNoir(byte l, byte co)
+        {
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
+            {
+                PriseDame prise = null;
+                bool premierPionNonRencontre = true, secondPionNonRencontre = true;
+                bool poursuivie = false;
+                for (byte li = getLigneVoisine(l, position), col = getColonneVoisine(co, position);
+                    li >= 0 && li < taille && col >= 0 && col < taille && secondPionNonRencontre;
+                    li = getLigneVoisine(li, position), col = getColonneVoisine(col, position))
+                {
+                    if (grille[li, col] != VIDE)
+                    {
+                        if (premierPionNonRencontre)
+                        {
+                            premierPionNonRencontre = false;
+                            if (grille[li, col] > 0
+                                && caseApresSautLibre(l, co, li, col, position))
+                                prise = new PriseDame(CASES[l, co], CASES[li, col]);
+                            else secondPionNonRencontre = false;
+                        }
+                        else secondPionNonRencontre = false;
+                    }
+                    else if (!premierPionNonRencontre && prise != null)
+                    {
+                        if (!poursuivie)
+                        {
+                            prise.cases.Add(CASES[li, col]);
+                            poursuivie = true;
+                        }
+                        else prise = new PriseDame(prise, CASES[li, col]);
+                        prisesEnCours.Enqueue(prise);
+                    }
+                }
+
+                while (prisesEnCours.Count > 0)
+                {
+                    Prise p2 = prisesEnCours.Dequeue();
+                    //bool ici ou boucle suivante ?
+                    poursuivie = false;
+
+                    for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                    {
+                        prise = null;
+                        premierPionNonRencontre = true;
+                        secondPionNonRencontre = true;
+                        for (byte li = getLigneVoisine(l, position), col = getColonneVoisine(co, position);
+                            li >= 0 && li < taille && col >= 0 && col < taille && secondPionNonRencontre;
+                            li = getLigneVoisine(li, position), col = getColonneVoisine(col, position))
+                        {
+                            if (grille[li, col] != VIDE)
+                            {
+                                if (premierPionNonRencontre)
+                                {
+                                    premierPionNonRencontre = false;
+                                    if (grille[li, col] > 0 && !p2.pionVirtuellementPris(li, col)
+                                        && caseApresSautLibreOuContientPionPreneur(prise, li, col, position))
+                                        p2.cases.Add(CASES[li, col]);
+                                    else secondPionNonRencontre = false;
+                                }
+                                else secondPionNonRencontre = false;
+                            }
+                            else if (!premierPionNonRencontre && prise != null)
                             {
                                 if (!poursuivie)
                                 {
-                                    p2.cases.Add(c);
-                                    p2.cases.Add(caseVoisine(c, pos2));
-                                    prises.Enqueue(p2);
-                                    // amputer p2 des 2 dernières cases pour copies des autres adjacentes
+                                    prise.cases.Add(CASES[li, col]);
                                     poursuivie = true;
                                 }
-                                else
-                                {
-                                    Prise p3 = new Prise(p2, c.ligne, c.colonne);
-                                    p3.cases.Add(caseVoisine(c, pos2));
-                                    prises.Enqueue(p3);
-                                }
+                                else prise = new PriseDame(prise, CASES[li, col]);
+                                prisesEnCours.Enqueue(prise);
                             }
-
-
                         }
                     }
-                }
-
-            }
-
-                List<Prise> prisesEnCours = new List<Prise>(), prisesEtendues = new List<Prise>();
-            if (Math.Abs(grille[ligne, colonne]) == 2)
-                prisesEnCours.Add(new PriseDame(ligne, colonne));
-            else prisesEnCours.Add(new Prise(ligne, colonne));
-            do
-            {
-                Prise p = prisesEnCours[0];
-                prisesEnCours.RemoveAt(0);
-                prisesEnCours.AddRange(etendrePrise(p));
-                //prisesEtendues.Add(p);
-            } while (prisesEnCours.Count > 0);
-            prisesEtendues.RemoveAt(0);
-            prisesEtendues.RemoveAll(x => x.nombrePionsPris() < maxPionsPris);
-            actionsPossibles.AddRange(prisesEtendues);
-        }
-
-        Case caseVoisine(Case c,int position)
-        {
-            switch (position)
-            {
-                case (HAUT_GAUCHE):return CASES[c.ligne - 1, c.colonne - 1];
-                case (HAUT_DROIT):return CASES[c.ligne - 1, c.colonne + 1];
-                case (BAS_DROIT):return CASES[c.ligne + 1, c.colonne + 1];
-                case (BAS_GAUCHE):return CASES[c.ligne + 1, c.colonne - 1];
-            }
-            return null;
-        }
-
-        /* Etend la prise p : renvoie toutes les prises résultant de son extension aux pions adverses voisins du pion 
-         * preneur ou situés sur la diagonale de la dame preneuse, si une case libre se trouve derrière eux. */
-
-        //OPTI : créer nouvelle prise seulement si plusieurs prises possibles à partir du même pion
-             //   boucler jusqu'à 
-        
-        List<Prise> etendrePrise(Prise p)
-        {
-            List<Prise> prises = new List<Prise>();
-            Case c = p.cazArrivee();
-            int l = p.cases[0].ligne, co = p.cases[0].colonne;
-            int ligneArrivee = c.ligne, colArrivee = c.colonne;
-            if (p is PriseDame)
-            {
-                for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
-                {
-                    bool premierPionNonRencontre = true, secondPionNonRencontre = true;
-                    PriseDame priseD = null;
-                    for (byte ligne = getLigneVoisine(ligneArrivee, position), col = getColonneVoisine(colArrivee,
-                        position); ligne >= 0 && ligne < taille && col >= 0 && col < taille
-                         && secondPionNonRencontre; ligne = getLigneVoisine(ligne, position), col = getColonneVoisine(col, position))
-                    {
-                        if (grille[ligne, col] != VIDE)
-                        {
-                            if (premierPionNonRencontre)
-                            {
-                                premierPionNonRencontre = false;
-                                if (caseOccupeeParAdversaire(grille[l, co], ligne, col)
-                                    && caseApresSautLibreOuContientPionPreneur(p, ligne, col, position)
-                                    && !p.pionVirtuellementPris(ligne, col))
-                                    priseD = new PriseDame(p, ligne, col);
-                                    
-                                else
-                                    secondPionNonRencontre = false;
-                            }
-                            else
-                                secondPionNonRencontre = false;
-                        }
-                        else if (!premierPionNonRencontre && priseD != null)
-                        {
-                            PriseDame p1 = new PriseDame(priseD, ligne, col);
-                            prises.Add(p1);
-                            int n = p1.nombrePionsPris();
-                            if (n > maxPionsPris)
-                                maxPionsPris = n;
-                        }
-                            
-                    }
+                    if (!poursuivie)
+                        prisesEtendues.Enqueue(p2);
                 }
             }
-            else for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
-                {
-                    byte ligne = getLigneVoisine(ligneArrivee, position), col = getColonneVoisine(colArrivee, position);
-                    if (peutEtendrePrise(p, position) && !p.pionVirtuellementPris(ligne, col))
-                    {
-                        Prise p1 = new Prise(p, getLigneVoisine(ligne, position), getColonneVoisine(col, position));
-                        prises.Add(p1);
-                        int n = p1.nombrePionsPris();
-                        if (n > maxPionsPris)
-                            maxPionsPris = n;
-                    }
-                }
-            
-            return prises;
         }
 
         /* Supprime les prises "doublons" : les prises du même pion preneur, prenant les mêmes pions adverses dans le même ordre, se terminant sur la même case, et caractérisées par des cases étapes/intermédiaires différentes. */
         void triePrisesDames()
         {
+            //
             List<Prise> prises = new List<Prise>();
             PriseDame p1, p2;
             for (byte i = 0; i < actionsPossibles.Count; i++)
@@ -443,22 +609,6 @@ namespace Assets
             }
         }
 
-        bool caseOccupeeParAdversaire(int pion, int ligneCase, int colCase)
-        {
-            int pionCase = grille[ligneCase, colCase];
-            return (pion < 0 && pionCase > 0) || (pion > 0 && pionCase < 0);
-        }
-
-        bool caseContientBlanc(int l, int c)
-        {
-            return grille[l,c]>0;
-        }
-
-        bool caseContientNoir(int l,int c)
-        {
-            return grille[l, c] < 0;
-        }
-
         bool caseApresSautLibreOuContientPionPreneur(Prise p, byte l, byte c, short pos)
         {
             byte ligne = getLigneVoisine(l, pos), col = getColonneVoisine(c, pos);
@@ -473,70 +623,19 @@ namespace Assets
             return (ligne >= 0 && ligne < taille) && (col >= 0 && col < taille) && grille[ligne, col] == VIDE;
         }
 
-        bool peutEtendrePrise(Prise p, short positionCase)
-        {
-            Case c = p.cazArrivee(), c2 = p.cases[0];
-            byte l = c.ligne, co = c.colonne;
-            return contientPionAdverse(grille[c2.ligne, c2.colonne], l, co, positionCase) && 
-                caseApresSautLibreOuContientPionPreneur(p, getLigneVoisine(l, positionCase), getColonneVoisine(co, positionCase), positionCase);
-        }
-
-        bool contientPionAdverse(int pion, int ligne, int col, int position)
-        {
-            switch (position)
-            {
-                case (HAUT_GAUCHE):
-                    return ligne + HAUT >= 0 && col + GAUCHE >= 0 && ((pion > 0 && grille[ligne + HAUT, col + GAUCHE] < 0)
-                        || (pion < 0 && grille[ligne + HAUT, col + GAUCHE] > 0));
-                case (HAUT_DROIT):
-                    return ligne + HAUT >= 0 && col + DROITE < taille
-                        && ((pion > 0 && grille[ligne + HAUT, col + DROITE] < 0)
-                            || (pion < 0 && grille[ligne + HAUT, col + DROITE] > 0));
-                case (BAS_DROIT):
-                    return ligne + BAS < taille && col + DROITE < taille
-                        && ((pion > 0 && grille[ligne + BAS, col + DROITE] < 0)
-                            || (pion < 0 && grille[ligne + BAS, col + DROITE] > 0));
-                case (BAS_GAUCHE):
-                    return ligne + BAS < taille && col + GAUCHE >= 0
-                        && ((pion > 0 && grille[ligne + BAS, col + GAUCHE] < 0)
-                            || (pion < 0 && grille[ligne + BAS, col + GAUCHE] > 0));
-            }
-            return false;
-        }
-
-        bool contientPionBlanc(int ligne, int col, int position)
-        {
-            switch (position)
-            {
-                case (HAUT_GAUCHE):
-                    return ligne + HAUT >= 0 && col + GAUCHE >= 0 && grille[ligne + HAUT, col + GAUCHE] > 0;
-                case (HAUT_DROIT):
-                    return ligne + HAUT >= 0 && col + DROITE < taille && grille[ligne + HAUT, col + DROITE] > 0;
-                case (BAS_DROIT):
-                    return ligne + BAS < taille && col + DROITE < taille && grille[ligne + BAS, col + DROITE] > 0;
-                case (BAS_GAUCHE):
-                    return ligne + BAS < taille && col + GAUCHE >= 0 &&  grille[ligne + BAS, col + GAUCHE] > 0;
-            }
-            return false;
-        }
-
-        bool contientPionNoir(int ligne, int col, int position)
-        {
-            switch (position)
-            {
-                case (HAUT_GAUCHE):
-                    return ligne + HAUT >= 0 && col + GAUCHE >= 0 && grille[ligne + HAUT, col + GAUCHE] < 0;
-                case (HAUT_DROIT):
-                    return ligne + HAUT >= 0 && col + DROITE < taille && grille[ligne + HAUT, col + DROITE] < 0;
-                case (BAS_DROIT):
-                    return ligne + BAS < taille && col + DROITE < taille && grille[ligne + BAS, col + DROITE] < 0;
-                case (BAS_GAUCHE):
-                    return ligne + BAS < taille && col + GAUCHE >= 0 && grille[ligne + BAS, col + GAUCHE] < 0;
-            }
-            return false;
-        }
-
         const byte ERR = 101;
+
+        Case caseVoisine(Case c, int position)
+        {
+            switch (position)
+            {
+                case (HAUT_GAUCHE): return CASES[c.ligne - 1, c.colonne - 1];
+                case (HAUT_DROIT): return CASES[c.ligne - 1, c.colonne + 1];
+                case (BAS_DROIT): return CASES[c.ligne + 1, c.colonne + 1];
+                case (BAS_GAUCHE): return CASES[c.ligne + 1, c.colonne - 1];
+            }
+            return null;
+        }
 
         static byte getLigneVoisine(int ligne, int position)
         {
