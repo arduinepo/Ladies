@@ -28,7 +28,9 @@ namespace Assets
         };
         public static Case[,] CASES = new Case[10, 10];
         static Mouvement[,,] MOUVEMENTS_PIONS = new Mouvement[10, 10, 4];
-        static Dictionary<int, Mouvement>[,] MOUVEMENTS_DAMES = new Dictionary<int, Mouvement>[10, 10];
+        static Prise[,,] PRISES_PIONS = new Prise[10, 10, 4];
+        static Dictionary<int, Mouvement>[,,] MOUVEMENTS_DAMES = new Dictionary<int, Mouvement>[10, 10, 2];
+        static Dictionary<int, Dictionary<int, PriseDame>>[,,] PRISES_DAMES = new Dictionary<int, Dictionary<int, PriseDame>>[10, 10, 2];
 
         const int HAUT_GAUCHE = 0, HAUT_DROIT = 1, BAS_DROIT = 2, BAS_GAUCHE = 3;
         const int HAUT = -1, GAUCHE = -1, BAS = 1, DROITE = 1;
@@ -38,14 +40,14 @@ namespace Assets
 
         public int[,] grille;
         public int taille;
-        public List<Case> pionsBlancs, pionsNoirs, damesBlancs, damesNoirs;
+        //public List<Case> pionsBlancs, pionsNoirs, damesBlancs, damesNoirs;
         protected bool tour;
         public int nbPionsBlancs, nbPionsNoirs, nbDamesBlancs, nbDamesNoirs;
 
         public List<Action> actionsPossibles;
         private int maxPionsPris;
         private Queue<Prise> prisesEnCours, prisesEtendues;
-        private Queue<PriseDame>prisesDamesEnCours, prisesDamesEtendues;
+        private Queue<PriseDame> prisesDamesEnCours, prisesDamesEtendues;
         #endregion
 
         static Grille()
@@ -53,30 +55,34 @@ namespace Assets
             for (byte i = 0; i < 9; i++)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
-                    if(j>0)
-                        MOUVEMENTS_PIONS[i, j, BAS_GAUCHE] = new Mouvement(i, j, (byte)(i + 1), (byte)(j - 1));
-                    if(j<9)
-                        MOUVEMENTS_PIONS[i, j, BAS_DROIT] = new Mouvement(i, j, (byte)(i + 1), (byte)(j + 1));
+                    if (j > 0)
+                        MOUVEMENTS_PIONS[i, j, BAS_GAUCHE] = new MouvementNoir(CASES[i, j], CASES[i + 1, j - 1]);
+                    if (j < 9)
+                        MOUVEMENTS_PIONS[i, j, BAS_DROIT] = new MouvementNoir(CASES[i, j], CASES[i + 1, j + 1]);
                 }
             for (byte i = 1; i < 10; i++)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
                     if (j > 0)
-                        MOUVEMENTS_PIONS[i, j, HAUT_GAUCHE] = new Mouvement(i, j, (byte)(i + 1), (byte)(j - 1));
+                        MOUVEMENTS_PIONS[i, j, HAUT_GAUCHE] = new MouvementBlanc(CASES[i, j], CASES[i - 1, j - 1]);
                     if (j < 9)
-                        MOUVEMENTS_PIONS[i, j, HAUT_DROIT] = new Mouvement(i, j, (byte)(i + 1), (byte)(j + 1));
+                        MOUVEMENTS_PIONS[i, j, HAUT_DROIT] = new MouvementBlanc(CASES[i, j], CASES[i - 1, j + 1]);
                 }
             for (byte i = 0; i < 10; i++)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
                     CASES[i, j] = new Case(i, j);
-                    MOUVEMENTS_DAMES[i, j] = new Dictionary<int, Mouvement>(20);
+                    MOUVEMENTS_DAMES[i, j, 0] = new Dictionary<int, Mouvement>(20);
+                    MOUVEMENTS_DAMES[i, j, 1] = new Dictionary<int, Mouvement>(20);
                     for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
                     {
-                        for (byte ligne = getLigneVoisine(i, pos), col = getColonneVoisine(j, pos); 
-                            ligne >= 0 && ligne < 10 && col >= 0 && col < 10; 
-                            ligne = getLigneVoisine(ligne, pos),col = getColonneVoisine(col, pos) )
-                            MOUVEMENTS_DAMES[i, j].Add((byte)(ligne * 10 + col), new Mouvement(i, j, ligne, col));
+                        for (byte ligne = getLigneVoisine(i, pos), col = getColonneVoisine(j, pos);
+                            ligne >= 0 && ligne < 10 && col >= 0 && col < 10;
+                            ligne = getLigneVoisine(ligne, pos), col = getColonneVoisine(col, pos))
+                        {
+                            MOUVEMENTS_DAMES[i, j, 0].Add(ligne * 10 + col, new MouvementBlanc(CASES[i, j], CASES[ligne, col]));
+                            MOUVEMENTS_DAMES[i, j, 1].Add(ligne * 10 + col, new MouvementNoir(CASES[i, j], CASES[ligne, col]));
+                        }
                     }
                 }
         }
@@ -86,6 +92,7 @@ namespace Assets
             grille = (int[,])GRILLE_10.Clone();
             taille = 10;
             tour = TOUR_BLANCS;
+            /*
             pionsBlancs = new List<Case>(20);
             pionsNoirs = new List<Case>(20);
             damesBlancs = new List<Case>(10);
@@ -98,6 +105,7 @@ namespace Assets
                     if (j > 5)
                         pionsBlancs[nbPionsBlancs++] = CASES[i, j];
                 }
+            */
             nbPionsBlancs = nbPionsNoirs = 20;
             nbDamesBlancs = nbDamesNoirs = 0;
         }
@@ -117,14 +125,14 @@ namespace Assets
         {
             actionsPossibles = new List<Action>();
             prises();
-            if(actionsPossibles.Count==0)
+            if (actionsPossibles.Count == 0)
                 mouvementsPossibles();
         }
 
-        public Action realiseActionCases(Case c1,Case c2)
+        public Action realiseActionCases(Case c1, Case c2)
         {
             foreach (Action a in actionsPossibles)
-                if (a.commenceEtPasse(c1,c2))
+                if (a.commenceEtPasse(c1, c2))
                     return realiserAction(a);
             return null;
         }
@@ -132,11 +140,7 @@ namespace Assets
         /* Réalise l'action a, et promeut le pion en dame si nécessaire. Bascule le tour des joueurs.*/
         public Action realiserAction(Action a)
         {
-            if (a.realiser(this))
-            {
-                Case c = a.cazArrivee();
-                ennoblir(c.ligne, c.colonne);
-            }
+            a.realiser(this);
             tour = !this.tour;
             return a;
         }
@@ -189,8 +193,10 @@ namespace Assets
             {
                 grille[l, c] = DAME_BLANC;
                 Case ca = CASES[l, c];
+                /*
                 pionsBlancs.Remove(ca);
                 damesBlancs.Add(ca);
+                */
                 nbPionsBlancs--;
                 nbDamesBlancs++;
             }
@@ -198,11 +204,28 @@ namespace Assets
             {
                 grille[l, c] = DAME_NOIR;
                 Case ca = CASES[l, c];
+                /*
                 pionsNoirs.Remove(ca);
                 damesNoirs.Add(ca);
+                */
                 nbPionsNoirs--;
                 nbDamesNoirs++;
             }
+
+        }
+
+        public void ennoblirBlanc(Case c)
+        {
+            grille[c.ligne, c.colonne] = DAME_BLANC;
+            nbPionsBlancs--;
+            nbDamesBlancs++;
+        }
+
+        public void ennoblirNoir(Case c)
+        {
+            grille[c.ligne, c.colonne] = DAME_NOIR;
+            nbPionsNoirs--;
+            nbDamesNoirs++;
         }
 
         /*Génère tous les mouvements possibles dans le configuration courante suivant le tour des joueurs :
@@ -214,6 +237,7 @@ namespace Assets
         {
             if (tour == TOUR_BLANCS)
             {
+                /*
                 foreach (Case c in pionsBlancs)
                 {
                     int pos = HAUT_GAUCHE;
@@ -233,11 +257,13 @@ namespace Assets
                             ligne >= 0 && ligne < taille && col >= 0 && col < taille
                             && grille[ligne, col] == VIDE; ligne = getLigneVoisine(ligne, pos),
                                 col = getColonneVoisine(col, pos))
-                            actionsPossibles.Add(MOUVEMENTS_DAMES[c.ligne, c.colonne][ligne * 10 + col]);
+                            actionsPossibles.Add(MOUVEMENTS_DAMES[c.ligne, c.colonne,0][ligne * 10 + col]);
                 }
+                */
             }
             else
             {
+                /*
                 foreach (Case c in pionsNoirs)
                 {
                     short pos = BAS_GAUCHE;
@@ -257,8 +283,9 @@ namespace Assets
                             ligne >= 0 && ligne < taille && col >= 0 && col < taille
                             && grille[ligne, col] == VIDE; ligne = getLigneVoisine(ligne, pos),
                                 col = getColonneVoisine(col, pos))
-                            actionsPossibles.Add(MOUVEMENTS_DAMES[c.ligne, c.colonne][ligne * 10 + col]);
+                            actionsPossibles.Add(MOUVEMENTS_DAMES[c.ligne, c.colonne,1][ligne * 10 + col]);
                 }
+                */
             }
         }
 
@@ -270,6 +297,7 @@ namespace Assets
             prisesEtendues = new Queue<Prise>();
             prisesDamesEtendues = new Queue<PriseDame>();
             maxPionsPris = 0;
+            /*
             if (tour == TOUR_BLANCS)
             {
                 foreach (Case c in pionsBlancs)
@@ -284,7 +312,30 @@ namespace Assets
                 foreach (Case c in damesNoirs)
                     prisesDameNoir(c.ligne, c.colonne);
             }
-            foreach(Prise p in prisesEtendues)
+            */
+            if (tour == TOUR_BLANCS)
+            {
+                for (byte i = 0; i < taille; i++)
+                    for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < taille; j += 2)
+                    {
+                        if (grille[i, j] == PION_BLANC)
+                            prisesPionBlanc(i, j);
+                        if (grille[i, j] == DAME_BLANC)
+                            prisesDameBlanc(i, j);
+                    }
+            }
+            else
+            {
+                for (byte i = 0; i < taille; i++)
+                    for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < taille; j += 2)
+                    {
+                        if (grille[i, j] == PION_NOIR)
+                            prisesPionNoir(i, j);
+                        if (grille[i, j] == DAME_NOIR)
+                            prisesDameNoir(i, j);
+                    }
+            }
+            foreach (Prise p in prisesEtendues)
             {
                 int n = p.nombrePionsPris();
                 if (n > maxPionsPris)
@@ -314,12 +365,12 @@ namespace Assets
             for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
             {
                 byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
-                if (l2 > 0 && l2 < taille-1 && c2 > 0 && c2 < taille-1 && grille[l2, c2] < 0)
+                if (l2 > 0 && l2 < taille - 1 && c2 > 0 && c2 < taille - 1 && grille[l2, c2] < 0)
                 {
                     byte l3 = getLigneVoisine(l2, position), c3 = getColonneVoisine(c2, position);
                     if (grille[l3, c3] == VIDE)
                     {
-                        Prise p = new Prise(CASES[l1, c1], CASES[l2, c2]);
+                        Prise p = new PriseBlanc(CASES[l1, c1], CASES[l2, c2]);
                         p.cases.Add(CASES[l3, c3]);
                         prisesEnCours.Enqueue(p);
                         while (prisesEnCours.Count > 0)
@@ -330,7 +381,7 @@ namespace Assets
                             {
                                 l2 = getLigneVoisine(l3, pos2);
                                 c2 = getColonneVoisine(c3, pos2);
-                                if (l2 > 0 && l2 < taille-1 && c2 > 0 && c2 < taille-1)
+                                if (l2 > 0 && l2 < taille - 1 && c2 > 0 && c2 < taille - 1)
                                 {
                                     l3 = getLigneVoisine(l2, pos2);
                                     c3 = getColonneVoisine(c2, pos2);
@@ -340,13 +391,13 @@ namespace Assets
                                         if (!poursuivie)
                                         {
                                             p2.cases.Add(ca);
-                                            p2.cases.Add(CASES[l3,c3]);
+                                            p2.cases.Add(CASES[l3, c3]);
                                             prisesEnCours.Enqueue(p2);
                                             poursuivie = true;
                                         }
                                         else
                                         {
-                                            Prise p3 = new Prise(p2, ca);
+                                            Prise p3 = new PriseBlanc(p2, ca);
                                             p3.cases.Add(CASES[l3, c3]);
                                             prisesEnCours.Enqueue(p3);
                                         }
@@ -371,7 +422,7 @@ namespace Assets
                     byte l3 = getLigneVoisine(l2, position), c3 = getColonneVoisine(c2, position);
                     if (grille[l3, c3] == VIDE)
                     {
-                        Prise p = new Prise(CASES[l1, c1], CASES[l2, c2]);
+                        Prise p = new PriseNoir(CASES[l1, c1], CASES[l2, c2]);
                         p.cases.Add(CASES[l3, c3]);
                         prisesEnCours.Enqueue(p);
                         while (prisesEnCours.Count > 0)
@@ -398,7 +449,7 @@ namespace Assets
                                         }
                                         else
                                         {
-                                            Prise p3 = new Prise(p2, ca);
+                                            Prise p3 = new PriseNoir(p2, ca);
                                             p3.cases.Add(CASES[l3, c3]);
                                             prisesEnCours.Enqueue(p3);
                                         }
@@ -420,8 +471,8 @@ namespace Assets
                 PriseDame prise = null;
                 bool premierPionNonRencontre = true, secondPionNonRencontre = true;
                 bool premiereArrivee = false;
-                for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1,position); 
-                    l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre; 
+                for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
+                    l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre;
                     l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
                 {
                     if (grille[l2, c2] != VIDE)
@@ -430,9 +481,9 @@ namespace Assets
                         if (premierPionNonRencontre)
                         {
                             premierPionNonRencontre = false;
-                            if (grille[l2, c2]<0
-                                && caseApresSautLibre(l1,c1, l2, c2, position))
-                                prise = new PriseDame(CASES[l1, c1], CASES[l2, c2]);
+                            if (grille[l2, c2] < 0
+                                && caseApresSautLibre(l1, c1, l2, c2, position))
+                                prise = new PriseBlanche(CASES[l1, c1], CASES[l2, c2]);
                             else secondPionNonRencontre = false;
                         }
                         else secondPionNonRencontre = false;
@@ -444,9 +495,9 @@ namespace Assets
                         {
                             prise.cases.Add(CASES[l2, c2]);
                             premiereArrivee = true;
+                            prisesDamesEnCours.Enqueue(prise);
                         }
-                        else prise = new PriseDame(prise, CASES[l2, c2]);
-                        prisesEnCours.Enqueue(prise);
+                        else prisesDamesEnCours.Enqueue(new PriseBlanche(prise, CASES[l2, c2]));
                     }
                 }
 
@@ -474,12 +525,11 @@ namespace Assets
                                         && caseApresSautLibreOuContientPionPreneur(p2, l2, c2, position))
                                     {
                                         if (!poursuivie)
-                                            p2.cases.Add(CASES[l2, c2]);
-                                        else
                                         {
-                                            prise = new PriseDame(p2, CASES[l2, c2]);
+                                            p2.cases.Add(CASES[l2, c2]);
                                             poursuivie = true;
                                         }
+                                        else prise = new PriseBlanche(p2, CASES[l2, c2]);
                                     }
                                     else secondPionNonRencontre = false;
                                 }
@@ -489,11 +539,21 @@ namespace Assets
                             {
                                 if (!premiereArrivee)
                                 {
-                                    prise.cases.Add(CASES[l2, c2]);
+                                    if (!poursuivie)
+                                    {
+                                        poursuivie = true;
+                                        p2.cases.Add(CASES[l2, c2]);
+                                    }
+                                    else prise.cases.Add(CASES[l2, c2]);
                                     premiereArrivee = true;
                                 }
-                                else prise = new PriseDame(prise, CASES[l2, c2]);
-                                prisesEnCours.Enqueue(prise);
+                                else
+                                {
+                                    if (!poursuivie)
+                                        prisesDamesEnCours.Enqueue(new PriseBlanche(p2, CASES[l2, c2]));
+                                    else
+                                        prisesDamesEnCours.Enqueue(new PriseBlanche(prise, CASES[l2, c2]));
+                                }
                             }
                         }
                     }
@@ -503,77 +563,93 @@ namespace Assets
             }
         }
 
-        void prisesDameNoir(byte l, byte co)
+        void prisesDameNoir(byte l1, byte c1)
         {
             for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
             {
                 PriseDame prise = null;
                 bool premierPionNonRencontre = true, secondPionNonRencontre = true;
-                bool poursuivie = false;
-                for (byte li = getLigneVoisine(l, position), col = getColonneVoisine(co, position);
-                    li >= 0 && li < taille && col >= 0 && col < taille && secondPionNonRencontre;
-                    li = getLigneVoisine(li, position), col = getColonneVoisine(col, position))
+                bool premiereArrivee = false;
+                for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
+                    l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre;
+                    l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
                 {
-                    if (grille[li, col] != VIDE)
+                    if (grille[l2, c2] != VIDE)
                     {
                         if (premierPionNonRencontre)
                         {
                             premierPionNonRencontre = false;
-                            if (grille[li, col] > 0
-                                && caseApresSautLibre(l, co, li, col, position))
-                                prise = new PriseDame(CASES[l, co], CASES[li, col]);
+                            if (grille[l2, c2] > 0
+                                && caseApresSautLibre(l1, c1, l2, c2, position))
+                                prise = new PriseNoire(CASES[l1, c1], CASES[l2, c2]);
                             else secondPionNonRencontre = false;
                         }
                         else secondPionNonRencontre = false;
                     }
                     else if (!premierPionNonRencontre && prise != null)
                     {
-                        if (!poursuivie)
+                        if (!premiereArrivee)
                         {
-                            prise.cases.Add(CASES[li, col]);
-                            poursuivie = true;
+                            prise.cases.Add(CASES[l2, c2]);
+                            premiereArrivee = true;
+                            prisesDamesEnCours.Enqueue(prise);
                         }
-                        else prise = new PriseDame(prise, CASES[li, col]);
-                        prisesEnCours.Enqueue(prise);
+                        else prisesDamesEnCours.Enqueue(new PriseNoire(prise, CASES[l2, c2]));
                     }
                 }
 
                 while (prisesEnCours.Count > 0)
                 {
-                    Prise p2 = prisesEnCours.Dequeue();
-                    //bool ici ou boucle suivante ?
-                    poursuivie = false;
+                    PriseDame p2 = prisesDamesEnCours.Dequeue();
+                    bool poursuivie = false;
 
                     for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
                     {
                         prise = null;
-                        premierPionNonRencontre = true;
-                        secondPionNonRencontre = true;
-                        for (byte li = getLigneVoisine(l, position), col = getColonneVoisine(co, position);
-                            li >= 0 && li < taille && col >= 0 && col < taille && secondPionNonRencontre;
-                            li = getLigneVoisine(li, position), col = getColonneVoisine(col, position))
+                        premierPionNonRencontre = secondPionNonRencontre = true;
+                        premiereArrivee = false;
+                        for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
+                            l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre;
+                            l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
                         {
-                            if (grille[li, col] != VIDE)
+                            if (grille[l2, c2] != VIDE)
                             {
                                 if (premierPionNonRencontre)
                                 {
                                     premierPionNonRencontre = false;
-                                    if (grille[li, col] > 0 && !p2.pionVirtuellementPris(li, col)
-                                        && caseApresSautLibreOuContientPionPreneur(prise, li, col, position))
-                                        p2.cases.Add(CASES[li, col]);
+                                    if (grille[l2, c2] > 0 && !p2.pionVirtuellementPris(l2, c2)
+                                        && caseApresSautLibreOuContientPionPreneur(p2, l2, c2, position))
+                                    {
+                                        if (!poursuivie)
+                                        {
+                                            p2.cases.Add(CASES[l2, c2]);
+                                            poursuivie = true;
+                                        }
+                                        else prise = new PriseNoire(p2, CASES[l2, c2]);
+                                    }
                                     else secondPionNonRencontre = false;
                                 }
                                 else secondPionNonRencontre = false;
                             }
                             else if (!premierPionNonRencontre && prise != null)
                             {
-                                if (!poursuivie)
+                                if (!premiereArrivee)
                                 {
-                                    prise.cases.Add(CASES[li, col]);
-                                    poursuivie = true;
+                                    if (!poursuivie)
+                                    {
+                                        poursuivie = true;
+                                        p2.cases.Add(CASES[l2, c2]);
+                                    }
+                                    else prise.cases.Add(CASES[l2, c2]);
+                                    premiereArrivee = true;
                                 }
-                                else prise = new PriseDame(prise, CASES[li, col]);
-                                prisesEnCours.Enqueue(prise);
+                                else
+                                {
+                                    if (!poursuivie)
+                                        prisesDamesEnCours.Enqueue(new PriseNoire(p2, CASES[l2, c2]));
+                                    else
+                                        prisesDamesEnCours.Enqueue(new PriseNoire(prise, CASES[l2, c2]));
+                                }
                             }
                         }
                     }
@@ -617,7 +693,7 @@ namespace Assets
             return grille[ligne, col] == VIDE || (ligne == p.cases[0].ligne && col == p.cases[0].colonne);
         }
 
-        bool caseApresSautLibre(byte ld,byte cd, byte l, byte c, short pos)
+        bool caseApresSautLibre(byte ld, byte cd, byte l, byte c, short pos)
         {
             byte ligne = getLigneVoisine(l, pos), col = getColonneVoisine(c, pos);
             return (ligne >= 0 && ligne < taille) && (col >= 0 && col < taille) && grille[ligne, col] == VIDE;

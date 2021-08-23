@@ -8,7 +8,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>10.0.20506</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <RootNamespace></RootNamespace>
+    <RootNamespace>
+    </RootNamespace>
     <ProjectGuid>{7D1A21AE-9914-C772-EA75-8D5126E3DC0B}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
@@ -58,6 +59,7 @@
   <ItemGroup>
     <Compile Include="Assets\Action.cs" />
     <Compile Include="Assets\Damier.cs" />
+    <Compile Include="Assets\Etat.cs" />
     <Compile Include="Assets\Grille.cs" />
     <Compile Include="Assets\Jeu.cs" />
   </ItemGroup>
