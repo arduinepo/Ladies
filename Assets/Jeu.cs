@@ -2,7 +2,7 @@
 
 namespace Assets
 {
-    public class Jeu
+    public class Jeu : MonoBehaviour
     {
         public static Jeu jeuEnCours;
 
@@ -11,12 +11,15 @@ namespace Assets
         public Damier d;
         Case depart, c2;
 
-        public Jeu()
+        void Awake()
         {
+            jeuEnCours = this;
             depart = null;
             c2 = null;
             d = GameObject.FindGameObjectWithTag("Damier").GetComponent<Damier>();
             g = new Grille();
+            j1 = new JoueurAléatoire(false, g);
+            d.initDisplay(g);
             g.genereActionsPossibles();
         }
 

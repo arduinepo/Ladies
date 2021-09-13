@@ -17,6 +17,11 @@ namespace Assets
             return ligne == c.ligne && colonne == c.colonne;
         }
 
+        public override string ToString()
+        {
+            return ligne + "-" + colonne;
+        }
+
     }
 
     public interface Action
@@ -25,6 +30,7 @@ namespace Assets
         void realiser(Grille g);
         bool commenceEtPasse(Case a1, Case a2);
 
+        string ToString();
     }
 
     public abstract class Mouvement : Action
@@ -49,6 +55,10 @@ namespace Assets
             return a1 == caseDepart && a2 == caseArrivee;
         }
 
+        public override string ToString()
+        {
+            return "" + caseDepart.ligne + "-" + caseDepart.colonne + " -> " + caseArrivee.ligne + "-" + caseArrivee.colonne;
+        }
     }
 
     public class MouvementBlanc : Mouvement
@@ -63,6 +73,11 @@ namespace Assets
             d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
         }
 
+        public override string ToString()
+        {
+            return "Pion Blanc : " + base.ToString();
+        }
+
     }
 
     public class ArriveeBlanc : Mouvement
@@ -73,9 +88,15 @@ namespace Assets
 
         public override void realiser(Grille d)
         {
-            d.grille[caseArrivee.ligne, caseArrivee.colonne] = Grille.PION_BLANC;
+            d.grille[caseArrivee.ligne, caseArrivee.colonne] = Grille.DAME_BLANC;
             d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
-            d.ennoblirBlanc(caseArrivee);
+            d.nbPionsBlancs--;
+            d.nbDamesBlancs++;
+        }
+
+        public override string ToString()
+        {
+            return "Pion Blanc : " + base.ToString();
         }
     }
 
@@ -89,6 +110,11 @@ namespace Assets
         {
             d.grille[caseArrivee.ligne, caseArrivee.colonne] = Grille.DAME_BLANC;
             d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
+        }
+
+        public override string ToString()
+        {
+            return "Dame Blanc : " + base.ToString();
         }
     }
 
@@ -104,6 +130,11 @@ namespace Assets
             d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
         }
 
+        public override string ToString()
+        {
+            return "Pion noir : " + base.ToString();
+        }
+
     }
 
     public class ArriveeNoir : Mouvement
@@ -114,9 +145,15 @@ namespace Assets
 
         public override void realiser(Grille d)
         {
-            d.grille[caseArrivee.ligne, caseArrivee.colonne] = Grille.PION_NOIR;
+            d.grille[caseArrivee.ligne, caseArrivee.colonne] = Grille.DAME_NOIR;
             d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
-            d.ennoblirBlanc(caseArrivee);
+            d.nbPionsNoirs--;
+            d.nbDamesNoirs++;
+        }
+
+        public override string ToString()
+        {
+            return "Pion noir : " + base.ToString();
         }
     }
     
@@ -131,11 +168,17 @@ namespace Assets
             d.grille[caseArrivee.ligne, caseArrivee.colonne] = Grille.DAME_NOIR;
             d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
         }
+
+        public override string ToString()
+        {
+            return "Dame noir : " + base.ToString();
+        }
     }
 
     public abstract class Prise : Action
     {
         public List<Case> cases;
+        public int lastDir;
 
         public Prise()
         {
@@ -151,10 +194,16 @@ namespace Assets
 
         public Prise(Prise p, Case c)
         {
-            cases = new List<Case>();
-            for (int i = 0; i < p.cases.Count - 2; i++)
-                cases.Add(p.cases[i]);
+            cases = new List<Case>(p.cases.GetRange(0,p.cases.Count-1));
             cases.Add(c);
+            lastDir = p.lastDir;
+        }
+
+        public void poursuit(Case c1,Case c2,int pos)
+        {
+            cases.Add(c1);
+            cases.Add(c2);
+            lastDir = pos;
         }
 
         public int nombrePionsPris()
@@ -167,36 +216,50 @@ namespace Assets
             return cases[cases.Count - 1];
         }
 
-        public bool pionVirtuellementPris(byte l, byte c)
+        public bool pionVirtuellementPris(int l, int c)
         {
             for (int i = 1; i < cases.Count; i += 2)
+            {
                 if (l == cases[i].ligne && c == cases[i].colonne)
                     return true;
+            }
             return false;
         }
-
-        // mémoire cases pions grille
 
         public bool commenceEtPasse(Case a1, Case a2)
         {
             if (a1 == cases[0])
                 for (int i = 1; i < cases.Count; i++)
-                    if (a2.equals(cases[i]))
+                    if (a2==cases[i])
                         return true;
             return false;
         }
 
         public abstract void realiser(Grille g);
+
+        public override string ToString()
+        {
+            string s = "";
+            foreach (Case c in cases)
+                s += c.ligne + "-" + c.colonne + " -> ";
+            return s.Substring(0, s.Length - 4);
+        }
+
     }
 
     public class PriseBlanc : Prise
     {
-        public PriseBlanc(Case c1, Case c2) : base(c1, c2)
+        
+        public PriseBlanc(Prise p, Case c,Case c2,int pos) : base(p, c)
         {
+            cases.Add(c2);
+            lastDir = pos;
         }
 
-        public PriseBlanc(Prise p, Case c) : base(p, c)
+        public PriseBlanc(Case c1, Case c2,Case c3,int pos) : base(c1, c2)
         {
+            cases.Add(c3);
+            lastDir = pos;
         }
 
         public override void realiser(Grille d)
@@ -215,20 +278,36 @@ namespace Assets
                 }
                 d.grille[c.ligne, c.colonne] = 0;
             }
-            d.grille[c.ligne, c.colonne] = Grille.PION_BLANC;
+            c = cases[cases.Count - 1];
+            if (c.ligne == 0)
+            {
+                d.grille[c.ligne, c.colonne] = Grille.DAME_BLANC;
+                d.nbPionsBlancs--;
+                d.nbDamesBlancs++;
+            }
+            else
+                d.grille[c.ligne, c.colonne] = Grille.PION_BLANC;
             d.grille[cases[0].ligne, cases[0].colonne] = 0;
         }
 
+        public override string ToString()
+        {
+            return "Pion Blanc : "+base.ToString();
+        }
     }
 
     public class PriseNoir : Prise
     {
-        public PriseNoir(Case c1, Case c2) : base(c1, c2)
+        public PriseNoir(Prise p, Case c, Case c2,int pos) : base(p, c)
         {
+            cases.Add(c2);
+            lastDir = pos;
         }
 
-        public PriseNoir(Prise p, Case c) : base(p, c)
+        public PriseNoir(Case c1, Case c2, Case c3, int pos) : base(c1, c2)
         {
+            cases.Add(c3);
+            lastDir = pos;
         }
 
         public override void realiser(Grille d)
@@ -248,28 +327,51 @@ namespace Assets
                 }
                 d.grille[c.ligne, c.colonne] = 0;
             }
-            d.grille[c.ligne, c.colonne] = Grille.PION_NOIR;
+            c = cases[cases.Count - 1];
+            if (c.ligne == d.taille - 1)
+            {
+                d.grille[c.ligne, c.colonne] = Grille.DAME_NOIR;
+                d.nbPionsNoirs--;
+                d.nbDamesNoirs++;
+            }
+            else
+                d.grille[c.ligne, c.colonne] = Grille.PION_NOIR;
             d.grille[cases[0].ligne, cases[0].colonne] = 0;
         }
 
+        public override string ToString()
+        {
+            return "Pion Noir : " + base.ToString();
+        }
     }
 
     public abstract class PriseDame : Prise
     {
-        public PriseDame(PriseDame p, Case c) : base()
-        {
-            cases.RemoveAt(cases.Count - 1);
-            cases.Add(c);
-        }
-
-        public PriseDame(Case p, Case c) : base(p, c)
+        public PriseDame(PriseDame p, Case c) : base(p,c)
         {
         }
 
-        internal bool prendMemePionsMemeOrdre(PriseDame p2)
+        public PriseDame(Case c1, Case c2,Case c3,int pos) : base(c1, c2)
         {
-            
+            cases.Add(c3);
+            lastDir = pos;
         }
+
+        public PriseDame() : base() { }
+
+        public bool prendMemePionsMemeOrdre(PriseDame p2)
+        {
+            int s1 = cases.Count, s2 = p2.cases.Count;
+            if( s1 != s2 || cases[0] != p2.cases[0]||cases[s1-1]!=p2.cases[s2-1])
+                return false;
+            for(int i = 1; i < s1; i += 2)
+            {
+                if (cases[i] != p2.cases[i])
+                    return false;
+            }
+            return true;
+        }
+
     }
 
     public class PriseBlanche : PriseDame
@@ -278,7 +380,17 @@ namespace Assets
         {
         }
 
-        public PriseBlanche(Case p, Case c) : base(p, c)
+        public PriseBlanche() : base() { }
+
+        public PriseBlanche(PriseDame p, Case c1,Case c2,int pos) : base()
+        {
+            cases = new List<Case>(p.cases.GetRange(0, p.cases.Count - 2));
+            cases.Add(c1);
+            cases.Add(c2);
+            lastDir = pos;
+        }
+
+        public PriseBlanche(Case c1, Case c2,Case c3,int pos) : base(c1, c2,c3,pos)
         {
         }
 
@@ -296,12 +408,17 @@ namespace Assets
                     case Grille.DAME_NOIR:
                         g.nbDamesNoirs--; break;
                 }
-                g.grille[c.ligne, c.colonne] = 0;
+                g.grille[c.ligne, c.colonne] = Grille.VIDE;
             }
+            c = cases[cases.Count - 1];
             g.grille[c.ligne, c.colonne] = Grille.DAME_BLANC;
             g.grille[cases[0].ligne, cases[0].colonne] = 0;
         }
 
+        public override string ToString()
+        {
+            return "Dame Blanc : " + base.ToString();
+        }
     }
 
     public class PriseNoire : PriseDame
@@ -310,7 +427,19 @@ namespace Assets
         {
         }
 
-        public PriseNoire(Case p, Case c) : base(p, c)
+        public PriseNoire() : base()
+        {
+        }
+
+        public PriseNoire(PriseDame p, Case c1, Case c2, int pos) : base()
+        {
+            cases = new List<Case>(p.cases.GetRange(0, p.cases.Count - 2));
+            cases.Add(c1);
+            cases.Add(c2);
+            lastDir = pos;
+        }
+
+        public PriseNoire(Case c1, Case c2,Case c3,int pos) : base(c1, c2,c3,pos)
         {
         }
 
@@ -330,8 +459,14 @@ namespace Assets
                 }
                 g.grille[c.ligne, c.colonne] = 0;
             }
+            c = cases[cases.Count - 1];
             g.grille[c.ligne, c.colonne] = Grille.DAME_NOIR;
             g.grille[cases[0].ligne, cases[0].colonne] = 0;
+        }
+
+        public override string ToString()
+        {
+            return "Dame noirs : " + base.ToString();
         }
 
     }

@@ -9,6 +9,7 @@ namespace Assets
         public static int MAX = Int32.MaxValue, MIN = Int32.MinValue;
         public List<int> pionsPris = new List<int>();
 
+        /*
         public Action meilleurCoup(int profondeur, Heuristique heuristique)
         {
             valeur = MIN;
@@ -30,6 +31,7 @@ namespace Assets
                 return heur.evalue(this);
 
         }
+        */
 
         public void annuleAction(Mouvement a)
         {

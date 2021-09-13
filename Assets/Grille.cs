@@ -1,15 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using UnityEngine;
 
 namespace Assets
 {
-    //Collection de tous les mouvements et prises uniques par pion possibles
-
-    //refaire géné prises
-    //doubler méthodes de recherche d'action suivant noirs ou blancs pour diminuer nombre de if
-    //1 : passer en matrice 1D
-    //2 : passer en matrice 1D sans les cases injouables
+    //1 : passer en matrice 1D sans les cases injouables
+    //Collection de tous les prises uniques par position
 
     public class Grille
     {
@@ -28,9 +26,10 @@ namespace Assets
         };
         public static Case[,] CASES = new Case[10, 10];
         static Mouvement[,,] MOUVEMENTS_PIONS = new Mouvement[10, 10, 4];
-        static Prise[,,] PRISES_PIONS = new Prise[10, 10, 4];
         static Dictionary<int, Mouvement>[,,] MOUVEMENTS_DAMES = new Dictionary<int, Mouvement>[10, 10, 2];
-        static Dictionary<int, Dictionary<int, PriseDame>>[,,] PRISES_DAMES = new Dictionary<int, Dictionary<int, PriseDame>>[10, 10, 2];
+        static List<int>[] DIRS = new List<int>[4]{
+            new int[3]{0,1,3 }.ToList(),new int[3]{1,2,0}.ToList(),new int[3]{2,3,1}.ToList(),new int[3]{3,0,2}.ToList()
+        };
 
         const int HAUT_GAUCHE = 0, HAUT_DROIT = 1, BAS_DROIT = 2, BAS_GAUCHE = 3;
         const int HAUT = -1, GAUCHE = -1, BAS = 1, DROITE = 1;
@@ -46,32 +45,58 @@ namespace Assets
 
         public List<Action> actionsPossibles;
         private int maxPionsPris;
-        private Queue<Prise> prisesEnCours, prisesEtendues;
-        private Queue<PriseDame> prisesDamesEnCours, prisesDamesEtendues;
+        private Queue<Prise> prisesEnCours;
+        List<Prise> prisesEtendues;
+        Queue<PriseDame> prisesDamesEnCours;
+        List<PriseDame> prisesDamesEtendues;
         #endregion
 
         static Grille()
         {
+            for (byte i = 0; i < 10; i++)
+                for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
+                    CASES[i, j] = new Case(i, j);
+
             for (byte i = 0; i < 9; i++)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
-                    if (j > 0)
-                        MOUVEMENTS_PIONS[i, j, BAS_GAUCHE] = new MouvementNoir(CASES[i, j], CASES[i + 1, j - 1]);
-                    if (j < 9)
-                        MOUVEMENTS_PIONS[i, j, BAS_DROIT] = new MouvementNoir(CASES[i, j], CASES[i + 1, j + 1]);
+                    if (i < 8)
+                    {
+                        if (j > 0)
+                            MOUVEMENTS_PIONS[i, j, BAS_GAUCHE] = new MouvementNoir(CASES[i, j], CASES[i + 1, j - 1]);
+                        if (j < 9)
+                            MOUVEMENTS_PIONS[i, j, BAS_DROIT] = new MouvementNoir(CASES[i, j], CASES[i + 1, j + 1]);
+                    }
+                    else
+                    {
+                        if (j > 0)
+                            MOUVEMENTS_PIONS[i, j, BAS_GAUCHE] = new ArriveeNoir(CASES[i, j], CASES[i + 1, j - 1]);
+                        if (j < 9)
+                            MOUVEMENTS_PIONS[i, j, BAS_DROIT] = new ArriveeNoir(CASES[i, j], CASES[i + 1, j + 1]);
+                    }
                 }
             for (byte i = 1; i < 10; i++)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
-                    if (j > 0)
-                        MOUVEMENTS_PIONS[i, j, HAUT_GAUCHE] = new MouvementBlanc(CASES[i, j], CASES[i - 1, j - 1]);
-                    if (j < 9)
-                        MOUVEMENTS_PIONS[i, j, HAUT_DROIT] = new MouvementBlanc(CASES[i, j], CASES[i - 1, j + 1]);
+                    if (i > 0)
+                    {
+                        if (j > 0)
+                            MOUVEMENTS_PIONS[i, j, HAUT_GAUCHE] = new MouvementBlanc(CASES[i, j], CASES[i - 1, j - 1]);
+                        if (j < 9)
+                            MOUVEMENTS_PIONS[i, j, HAUT_DROIT] = new MouvementBlanc(CASES[i, j], CASES[i - 1, j + 1]);
+                    }
+                    else
+                    {
+                        if (j > 0)
+                            MOUVEMENTS_PIONS[i, j, HAUT_GAUCHE] = new ArriveeBlanc(CASES[i, j], CASES[i - 1, j - 1]);
+                        if (j < 9)
+                            MOUVEMENTS_PIONS[i, j, HAUT_DROIT] = new ArriveeBlanc(CASES[i, j], CASES[i - 1, j + 1]);
+                    }
+
                 }
             for (byte i = 0; i < 10; i++)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
-                    CASES[i, j] = new Case(i, j);
                     MOUVEMENTS_DAMES[i, j, 0] = new Dictionary<int, Mouvement>(20);
                     MOUVEMENTS_DAMES[i, j, 1] = new Dictionary<int, Mouvement>(20);
                     for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
@@ -80,8 +105,8 @@ namespace Assets
                             ligne >= 0 && ligne < 10 && col >= 0 && col < 10;
                             ligne = getLigneVoisine(ligne, pos), col = getColonneVoisine(col, pos))
                         {
-                            MOUVEMENTS_DAMES[i, j, 0].Add(ligne * 10 + col, new MouvementBlanc(CASES[i, j], CASES[ligne, col]));
-                            MOUVEMENTS_DAMES[i, j, 1].Add(ligne * 10 + col, new MouvementNoir(CASES[i, j], CASES[ligne, col]));
+                            MOUVEMENTS_DAMES[i, j, 0].Add(ligne * 10 + col, new MouvementBlanche(CASES[i, j], CASES[ligne, col]));
+                            MOUVEMENTS_DAMES[i, j, 1].Add(ligne * 10 + col, new MouvementNoire(CASES[i, j], CASES[ligne, col]));
                         }
                     }
                 }
@@ -187,82 +212,109 @@ namespace Assets
                 || (joueurBlanc != tour && actionsPossibles.Count == 0);
         }
 
-        private void ennoblir(byte l, byte c)
-        {
-            if (grille[l, c] == PION_BLANC)
-            {
-                grille[l, c] = DAME_BLANC;
-                Case ca = CASES[l, c];
-                /*
-                pionsBlancs.Remove(ca);
-                damesBlancs.Add(ca);
-                */
-                nbPionsBlancs--;
-                nbDamesBlancs++;
-            }
-            else
-            {
-                grille[l, c] = DAME_NOIR;
-                Case ca = CASES[l, c];
-                /*
-                pionsNoirs.Remove(ca);
-                damesNoirs.Add(ca);
-                */
-                nbPionsNoirs--;
-                nbDamesNoirs++;
-            }
-
-        }
-
-        public void ennoblirBlanc(Case c)
-        {
-            grille[c.ligne, c.colonne] = DAME_BLANC;
-            nbPionsBlancs--;
-            nbDamesBlancs++;
-        }
-
-        public void ennoblirNoir(Case c)
-        {
-            grille[c.ligne, c.colonne] = DAME_NOIR;
-            nbPionsNoirs--;
-            nbDamesNoirs++;
-        }
-
         /*Génère tous les mouvements possibles dans le configuration courante suivant le tour des joueurs :
         * parcourt les cases voisines immédiates des pions simples, et les cases situées sur les diagonales des dames.
-        * 
-        * itérations HAUT/BAS GAUCHE/DROIT à enlever, car 2 boucles seulement
         */
         void mouvementsPossibles()
         {
             if (tour == TOUR_BLANCS)
             {
-                /*
-                foreach (Case c in pionsBlancs)
-                {
-                    int pos = HAUT_GAUCHE;
-                    byte l = getLigneVoisine(c.ligne, pos), co = getColonneVoisine(c.colonne, pos);
-                    if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
-                            actionsPossibles.Add(MOUVEMENTS_PIONS[l, co, pos]);
-                    pos = HAUT_DROIT;
-                    l = getLigneVoisine(c.ligne, pos);
-                    co = getColonneVoisine(c.colonne, pos);
-                    if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
-                        actionsPossibles.Add(MOUVEMENTS_PIONS[l, co, pos]);
-                }
-                foreach(Case c in damesBlancs)
-                {
-                    for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
-                        for (byte ligne = getLigneVoisine(c.ligne, pos), col = getColonneVoisine(c.colonne, pos);
-                            ligne >= 0 && ligne < taille && col >= 0 && col < taille
-                            && grille[ligne, col] == VIDE; ligne = getLigneVoisine(ligne, pos),
-                                col = getColonneVoisine(col, pos))
-                            actionsPossibles.Add(MOUVEMENTS_DAMES[c.ligne, c.colonne,0][ligne * 10 + col]);
-                }
-                */
+                for (int i = 0; i < taille; i += 2)
+                    for (int j = 1; j < taille; j += 2)
+                    {
+                        if (grille[i, j] == PION_BLANC)
+                        {
+                            int pos = HAUT_GAUCHE;
+                            byte l = getLigneVoisine(i, pos), co = getColonneVoisine(j, pos);
+                            if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
+                                actionsPossibles.Add(MOUVEMENTS_PIONS[i, j, pos]);
+                            pos = HAUT_DROIT;
+                            l = getLigneVoisine(i, pos);
+                            co = getColonneVoisine(j, pos);
+                            if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
+                                actionsPossibles.Add(MOUVEMENTS_PIONS[i, j, pos]);
+                        }
+                        else if (grille[i, j] == DAME_BLANC)
+                        {
+                            for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
+                                for (byte ligne = getLigneVoisine(i, pos), col = getColonneVoisine(j, pos); ligne >= 0 && ligne < taille && col >= 0 && col < taille
+                                                                && grille[ligne, col] == VIDE; ligne = getLigneVoisine(ligne, pos), col = getColonneVoisine(col, pos))
+                                    actionsPossibles.Add(MOUVEMENTS_DAMES[i, j, 0][ligne * 10 + col]);
+                        }
+                    }
+                for (int i = 1; i < taille; i += 2)
+                    for (int j = 0; j < taille; j += 2)
+                    {
+                        if (grille[i, j] == PION_BLANC)
+                        {
+                            int pos = HAUT_GAUCHE;
+                            byte l = getLigneVoisine(i, pos), co = getColonneVoisine(j, pos);
+                            if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
+                                actionsPossibles.Add(MOUVEMENTS_PIONS[i, j, pos]);
+                            pos = HAUT_DROIT;
+                            l = getLigneVoisine(i, pos);
+                            co = getColonneVoisine(j, pos);
+                            if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
+                                actionsPossibles.Add(MOUVEMENTS_PIONS[i, j, pos]);
+                        }
+                        else if (grille[i, j] == DAME_BLANC)
+                        {
+                            for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
+                                for (byte ligne = getLigneVoisine(i, pos), col = getColonneVoisine(j, pos); ligne >= 0 && ligne < taille && col >= 0 && col < taille
+                                                                && grille[ligne, col] == VIDE; ligne = getLigneVoisine(ligne, pos), col = getColonneVoisine(col, pos))
+                                    actionsPossibles.Add(MOUVEMENTS_DAMES[i, j, 0][ligne * 10 + col]);
+                        }
+                    }
             }
             else
             {
+                for (int i = 0; i < taille; i += 2)
+                    for (int j = 1; j < taille; j += 2)
+                    {
+                        if (grille[i, j] == PION_NOIR)
+                        {
+                            int pos = BAS_GAUCHE;
+                            byte l = getLigneVoisine(i, pos), co = getColonneVoisine(j, pos);
+                            if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
+                                actionsPossibles.Add(MOUVEMENTS_PIONS[i, j, pos]);
+                            pos = BAS_DROIT;
+                            l = getLigneVoisine(i, pos);
+                            co = getColonneVoisine(j, pos);
+                            if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
+                                actionsPossibles.Add(MOUVEMENTS_PIONS[i, j, pos]);
+                        }
+                        else if (grille[i, j] == DAME_NOIR)
+                        {
+                            for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
+                                for (byte ligne = getLigneVoisine(i, pos), col = getColonneVoisine(j, pos); ligne >= 0 && ligne < taille && col >= 0 && col < taille
+                                                                && grille[ligne, col] == VIDE; ligne = getLigneVoisine(ligne, pos), col = getColonneVoisine(col, pos))
+                                    actionsPossibles.Add(MOUVEMENTS_DAMES[i, j, 0][ligne * 10 + col]);
+                        }
+                    }
+                for (int i = 1; i < taille; i += 2)
+                    for (int j = 0; j < taille; j += 2)
+                    {
+                        if (grille[i, j] == PION_NOIR)
+                        {
+                            int pos = BAS_GAUCHE;
+                            byte l = getLigneVoisine(i, pos), co = getColonneVoisine(j, pos);
+                            if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
+                                actionsPossibles.Add(MOUVEMENTS_PIONS[i, j, pos]);
+                            pos = BAS_DROIT;
+                            l = getLigneVoisine(i, pos);
+                            co = getColonneVoisine(j, pos);
+                            if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
+                                actionsPossibles.Add(MOUVEMENTS_PIONS[i, j, pos]);
+                        }
+                        else if (grille[i, j] == DAME_NOIR)
+                        {
+                            for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
+                                for (byte ligne = getLigneVoisine(i, pos), col = getColonneVoisine(j, pos); ligne >= 0 && ligne < taille && col >= 0 && col < taille
+                                                                && grille[ligne, col] == VIDE; ligne = getLigneVoisine(ligne, pos), col = getColonneVoisine(col, pos))
+                                    actionsPossibles.Add(MOUVEMENTS_DAMES[i, j, 0][ligne * 10 + col]);
+                        }
+                    }
+
                 /*
                 foreach (Case c in pionsNoirs)
                 {
@@ -294,29 +346,22 @@ namespace Assets
         {
             prisesEnCours = new Queue<Prise>();
             prisesDamesEnCours = new Queue<PriseDame>();
-            prisesEtendues = new Queue<Prise>();
-            prisesDamesEtendues = new Queue<PriseDame>();
+            prisesEtendues = new List<Prise>();
+            prisesDamesEtendues = new List<PriseDame>();
             maxPionsPris = 0;
-            /*
+
             if (tour == TOUR_BLANCS)
             {
-                foreach (Case c in pionsBlancs)
-                    prisesPionBlanc(c.ligne, c.colonne);
-                foreach(Case c in damesBlancs)
-                    prisesPionNoir(c.ligne, c.colonne);
-            }
-            else
-            {
-                foreach (Case c in pionsNoirs)
-                    prisesDameBlanc(c.ligne, c.colonne);
-                foreach (Case c in damesNoirs)
-                    prisesDameNoir(c.ligne, c.colonne);
-            }
-            */
-            if (tour == TOUR_BLANCS)
-            {
-                for (byte i = 0; i < taille; i++)
-                    for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < taille; j += 2)
+                for (byte i = 0; i < taille; i += 2)
+                    for (byte j = 1; j < taille; j += 2)
+                    {
+                        if (grille[i, j] == PION_BLANC)
+                            prisesPionBlanc(i, j);
+                        if (grille[i, j] == DAME_BLANC)
+                            prisesDameBlanc(i, j);
+                    }
+                for (byte i = 1; i < taille; i += 2)
+                    for (byte j = 0; j < taille; j += 2)
                     {
                         if (grille[i, j] == PION_BLANC)
                             prisesPionBlanc(i, j);
@@ -326,8 +371,16 @@ namespace Assets
             }
             else
             {
-                for (byte i = 0; i < taille; i++)
-                    for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < taille; j += 2)
+                for (byte i = 0; i < taille; i += 2)
+                    for (byte j = 1; j < taille; j += 2)
+                    {
+                        if (grille[i, j] == PION_NOIR)
+                            prisesPionNoir(i, j);
+                        if (grille[i, j] == DAME_NOIR)
+                            prisesDameNoir(i, j);
+                    }
+                for (byte i = 1; i < taille; i += 2)
+                    for (byte j = 0; j < taille; j += 2)
                     {
                         if (grille[i, j] == PION_NOIR)
                             prisesPionNoir(i, j);
@@ -335,326 +388,314 @@ namespace Assets
                             prisesDameNoir(i, j);
                     }
             }
+            int n;
             foreach (Prise p in prisesEtendues)
             {
-                int n = p.nombrePionsPris();
+                n = p.nombrePionsPris();
                 if (n > maxPionsPris)
                     maxPionsPris = n;
             }
             foreach (Prise p in prisesDamesEtendues)
             {
-                int n = p.nombrePionsPris();
+                n = p.nombrePionsPris();
                 if (n > maxPionsPris)
                     maxPionsPris = n;
             }
             foreach (Prise p in prisesEtendues)
-            {
                 if (p.nombrePionsPris() == maxPionsPris)
                     actionsPossibles.Add(p);
-            }
             foreach (Prise p in prisesDamesEtendues)
-            {
                 if (p.nombrePionsPris() == maxPionsPris)
                     actionsPossibles.Add(p);
-            }
             triePrisesDames();
         }
 
-        void prisesPionBlanc(byte l1, byte c1)
+        void prisesPionBlanc(int lignePion, int colonnePion)
         {
+            Prise p2;
             for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
             {
-                byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
-                if (l2 > 0 && l2 < taille - 1 && c2 > 0 && c2 < taille - 1 && grille[l2, c2] < 0)
+                int ligneAdjacente = getLigneVoisine(lignePion, position), colAdjacente = getColonneVoisine(colonnePion, position);
+                if (ligneAdjacente > 0 && ligneAdjacente < taille - 1 && colAdjacente > 0 && colAdjacente < taille - 1 && grille[ligneAdjacente, colAdjacente] < 0)
                 {
-                    byte l3 = getLigneVoisine(l2, position), c3 = getColonneVoisine(c2, position);
-                    if (grille[l3, c3] == VIDE)
+                    int ligneArrivee = getLigneVoisine(ligneAdjacente, position), colArrivee = getColonneVoisine(colAdjacente, position);
+                    if (grille[ligneArrivee, colArrivee] == VIDE)
                     {
-                        Prise p = new PriseBlanc(CASES[l1, c1], CASES[l2, c2]);
-                        p.cases.Add(CASES[l3, c3]);
-                        prisesEnCours.Enqueue(p);
+                        prisesEnCours.Enqueue(new PriseBlanc(CASES[lignePion, colonnePion], CASES[ligneAdjacente, colAdjacente], CASES[ligneArrivee, colArrivee],position));
                         while (prisesEnCours.Count > 0)
                         {
-                            Prise p2 = prisesEnCours.Dequeue();
+                            p2 = prisesEnCours.Dequeue();
+                            int lA = p2.cases[p2.cases.Count - 1].ligne;
+                            int cA = p2.cases[p2.cases.Count - 1].colonne;
                             bool poursuivie = false;
-                            for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                            int i = 0;
+                            int dir = p2.lastDir;
+                            for (; i < 3; i++)
                             {
-                                l2 = getLigneVoisine(l3, pos2);
-                                c2 = getColonneVoisine(c3, pos2);
-                                if (l2 > 0 && l2 < taille - 1 && c2 > 0 && c2 < taille - 1)
+                                int pos2 = DIRS[dir][i];
+                                ligneAdjacente = getLigneVoisine(lA, pos2);
+                                colAdjacente = getColonneVoisine(cA, pos2);
+                                if (ligneAdjacente > 0 && ligneAdjacente < taille - 1 && colAdjacente > 0 && colAdjacente < taille - 1 && grille[ligneAdjacente, colAdjacente] < 0 && !p2.pionVirtuellementPris(ligneAdjacente, colAdjacente))
                                 {
-                                    l3 = getLigneVoisine(l2, pos2);
-                                    c3 = getColonneVoisine(c2, pos2);
-                                    if (grille[l2, c2] < 0 && (grille[l3, c3] == VIDE || (l3 == p2.cases[0].ligne && c3 == p2.cases[0].colonne)))
+                                    ligneArrivee = getLigneVoisine(ligneAdjacente, pos2);
+                                    colArrivee = getColonneVoisine(colAdjacente, pos2);
+                                    if (grille[ligneArrivee, colArrivee] == VIDE || (ligneArrivee == p2.cases[0].ligne && colArrivee == p2.cases[0].colonne))
                                     {
-                                        Case ca = CASES[l2, c2];
                                         if (!poursuivie)
                                         {
-                                            p2.cases.Add(ca);
-                                            p2.cases.Add(CASES[l3, c3]);
+                                            p2.poursuit(CASES[ligneAdjacente, colAdjacente], CASES[ligneArrivee, colArrivee], pos2);
                                             prisesEnCours.Enqueue(p2);
                                             poursuivie = true;
                                         }
-                                        else
-                                        {
-                                            Prise p3 = new PriseBlanc(p2, ca);
-                                            p3.cases.Add(CASES[l3, c3]);
-                                            prisesEnCours.Enqueue(p3);
-                                        }
+                                        else prisesEnCours.Enqueue(new PriseBlanc(p2, CASES[ligneAdjacente, colAdjacente], CASES[ligneArrivee, colArrivee], pos2));
                                     }
                                 }
                             }
                             if (!poursuivie)
-                                prisesEtendues.Enqueue(p2);
+                                prisesEtendues.Add(p2);
                         }
                     }
                 }
             }
         }
 
-        void prisesPionNoir(byte l1, byte c1)
+        void prisesPionNoir(byte lignePion, byte colPion)
         {
+            Prise p2;
             for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
             {
-                byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
-                if (l2 > 0 && l2 < taille - 1 && c2 > 0 && c2 < taille - 1 && grille[l2, c2] > 0)
+                int ligneAdjacente = getLigneVoisine(lignePion, position), colAdjacente = getColonneVoisine(colPion, position);
+                if (ligneAdjacente > 0 && ligneAdjacente < taille - 1 && colAdjacente > 0 && colAdjacente < taille - 1 && grille[ligneAdjacente, colAdjacente] > 0)
                 {
-                    byte l3 = getLigneVoisine(l2, position), c3 = getColonneVoisine(c2, position);
-                    if (grille[l3, c3] == VIDE)
+                    int ligneArrivee = getLigneVoisine(ligneAdjacente, position), colArrivee = getColonneVoisine(colAdjacente, position);
+                    if (grille[ligneArrivee, colArrivee] == VIDE)
                     {
-                        Prise p = new PriseNoir(CASES[l1, c1], CASES[l2, c2]);
-                        p.cases.Add(CASES[l3, c3]);
-                        prisesEnCours.Enqueue(p);
+                        prisesEnCours.Enqueue(new PriseNoir(CASES[lignePion, colPion], CASES[ligneAdjacente, colAdjacente], CASES[ligneArrivee, colArrivee], position));
                         while (prisesEnCours.Count > 0)
                         {
-                            Prise p2 = prisesEnCours.Dequeue();
+                            p2 = prisesEnCours.Dequeue();
+                            int lA = p2.cases[p2.cases.Count - 1].ligne;
+                            int cA = p2.cases[p2.cases.Count - 1].colonne;
                             bool poursuivie = false;
-                            for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                            int i = 0;
+                            int dir = p2.lastDir;
+                            for (; i < 3; i++)
                             {
-                                l2 = getLigneVoisine(l3, pos2);
-                                c2 = getColonneVoisine(c3, pos2);
-                                if (l2 > 0 && l2 < taille - 1 && c2 > 0 && c2 < taille - 1)
+                                int pos2 = DIRS[dir][i];
+                                ligneAdjacente = getLigneVoisine(lA, pos2);
+                                colAdjacente = getColonneVoisine(cA, pos2);
+                                if (ligneAdjacente > 0 && ligneAdjacente < taille - 1 && colAdjacente > 0 && colAdjacente < taille - 1 && grille[ligneAdjacente, colAdjacente] > 0 && !p2.pionVirtuellementPris(ligneAdjacente, colAdjacente))
                                 {
-                                    l3 = getLigneVoisine(l2, pos2);
-                                    c3 = getColonneVoisine(c2, pos2);
-                                    if (grille[l2, c2] > 0 && (grille[l3, c3] == VIDE || (l3 == p2.cases[0].ligne && c3 == p2.cases[0].colonne)))
+                                    ligneArrivee = getLigneVoisine(ligneAdjacente, pos2);
+                                    colArrivee = getColonneVoisine(colAdjacente, pos2);
+                                    if (grille[ligneArrivee, colArrivee] == VIDE || (ligneArrivee == p2.cases[0].ligne && colArrivee == p2.cases[0].colonne))
                                     {
-                                        Case ca = CASES[l2, c2];
-                                        if (!poursuivie)
-                                        {
-                                            p2.cases.Add(ca);
-                                            p2.cases.Add(CASES[l3, c3]);
+                                        if (!poursuivie) {
+                                            p2.poursuit(CASES[ligneAdjacente, colAdjacente], CASES[ligneArrivee, colArrivee], pos2);
                                             prisesEnCours.Enqueue(p2);
                                             poursuivie = true;
                                         }
-                                        else
-                                        {
-                                            Prise p3 = new PriseNoir(p2, ca);
-                                            p3.cases.Add(CASES[l3, c3]);
-                                            prisesEnCours.Enqueue(p3);
-                                        }
+                                        else prisesEnCours.Enqueue(new PriseNoir(p2, CASES[ligneAdjacente, colAdjacente], CASES[ligneArrivee, colArrivee], pos2));
                                     }
                                 }
                             }
                             if (!poursuivie)
-                                prisesEtendues.Enqueue(p2);
+                                prisesEtendues.Add(p2);
                         }
                     }
                 }
             }
         }
 
-        void prisesDameBlanc(byte l1, byte c1)
+        void prisesDameBlanc(byte lignePion, byte colPion)
         {
+            Case adv = null;
+            PriseDame p1, p2;
             for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
             {
-                PriseDame prise = null;
-                bool premierPionNonRencontre = true, secondPionNonRencontre = true;
+                p1 = null;
+                bool premierPionRencontre = false, secondPionRencontre = false;
                 bool premiereArrivee = false;
-                for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
-                    l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre;
+                for (byte l2 = getLigneVoisine(lignePion, position), c2 = getColonneVoisine(colPion, position);
+                    l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && !secondPionRencontre;
                     l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
                 {
-                    if (grille[l2, c2] != VIDE)
+                    if (grille[l2, c2] < 0)
                     {
-                        //
-                        if (premierPionNonRencontre)
+                        if (!premierPionRencontre)
                         {
-                            premierPionNonRencontre = false;
-                            if (grille[l2, c2] < 0
-                                && caseApresSautLibre(l1, c1, l2, c2, position))
-                                prise = new PriseBlanche(CASES[l1, c1], CASES[l2, c2]);
-                            else secondPionNonRencontre = false;
+                            premierPionRencontre = true;
+                            adv = CASES[l2, c2];
                         }
-                        else secondPionNonRencontre = false;
+                        else secondPionRencontre = true;
                     }
-                    //
-                    else if (!premierPionNonRencontre && prise != null)
+                    else if (grille[l2, c2] == 0)
                     {
-                        if (!premiereArrivee)
+                        if (premierPionRencontre)
                         {
-                            prise.cases.Add(CASES[l2, c2]);
-                            premiereArrivee = true;
-                            prisesDamesEnCours.Enqueue(prise);
+                            if (!premiereArrivee)
+                            {
+                                p1 = new PriseBlanche(CASES[lignePion, colPion], adv, CASES[l2, c2],position);
+                                premiereArrivee = true;
+                                prisesDamesEnCours.Enqueue(p1);
+                            }
+                            else prisesDamesEnCours.Enqueue(new PriseBlanche(p1, CASES[l2, c2]));
+                            
                         }
-                        else prisesDamesEnCours.Enqueue(new PriseBlanche(prise, CASES[l2, c2]));
                     }
+                    else secondPionRencontre = true;
                 }
 
-                while (prisesEnCours.Count > 0)
+                while (prisesDamesEnCours.Count > 0)
                 {
-                    PriseDame p2 = prisesDamesEnCours.Dequeue();
+                    p2 = prisesDamesEnCours.Dequeue();
                     bool poursuivie = false;
-
-                    for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                    int lA  = p2.cases[p2.cases.Count - 1].ligne;
+                    int cA  = p2.cases[p2.cases.Count - 1].colonne;
+                    int lastDir = p2.lastDir;
+                    foreach (int pos2 in DIRS[lastDir])
                     {
-                        prise = null;
-                        premierPionNonRencontre = true;
-                        secondPionNonRencontre = true;
+                        byte l2 = getLigneVoisine(lA, pos2), c2 = getColonneVoisine(cA, pos2);
+                        premierPionRencontre = false;
+                        secondPionRencontre = false;
                         premiereArrivee = false;
-                        for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
-                            l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre;
-                            l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
+                        for (;l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && !secondPionRencontre;
+                            l2 = getLigneVoisine(l2, pos2), c2 = getColonneVoisine(c2, pos2))
                         {
-                            if (grille[l2, c2] != VIDE)
+                            if (grille[l2, c2] < 0)
                             {
-                                if (premierPionNonRencontre)
+                                if (!premierPionRencontre)
                                 {
-                                    premierPionNonRencontre = false;
-                                    if (grille[l2, c2] < 0 && !p2.pionVirtuellementPris(l2, c2)
-                                        && caseApresSautLibreOuContientPionPreneur(p2, l2, c2, position))
+                                    if (!p2.pionVirtuellementPris(l2, c2))
+                                    {
+                                        premierPionRencontre = true;
+                                        adv = CASES[l2, c2];
+                                    }
+                                    else secondPionRencontre = true;
+                                }
+                                else secondPionRencontre = true;
+                            }
+                            else if (grille[l2, c2] == 0|| (l2==p2.cases[0].ligne&&c2==p2.cases[0].colonne))
+                            {
+                                if (premierPionRencontre)
+                                {
+                                    if (!premiereArrivee)
                                     {
                                         if (!poursuivie)
                                         {
-                                            p2.cases.Add(CASES[l2, c2]);
+                                            p2.poursuit(adv, CASES[l2, c2], pos2);
+                                            prisesDamesEnCours.Enqueue(p2);
                                             poursuivie = true;
                                         }
-                                        else prise = new PriseBlanche(p2, CASES[l2, c2]);
+                                        else prisesDamesEnCours.Enqueue(new PriseBlanche(p2, adv, CASES[l2, c2], pos2));
+                                        premiereArrivee = true;
+                                        
                                     }
-                                    else secondPionNonRencontre = false;
-                                }
-                                else secondPionNonRencontre = false;
-                            }
-                            else if (!premierPionNonRencontre && prise != null)
-                            {
-                                if (!premiereArrivee)
-                                {
-                                    if (!poursuivie)
-                                    {
-                                        poursuivie = true;
-                                        p2.cases.Add(CASES[l2, c2]);
-                                    }
-                                    else prise.cases.Add(CASES[l2, c2]);
-                                    premiereArrivee = true;
-                                }
-                                else
-                                {
-                                    if (!poursuivie)
-                                        prisesDamesEnCours.Enqueue(new PriseBlanche(p2, CASES[l2, c2]));
-                                    else
-                                        prisesDamesEnCours.Enqueue(new PriseBlanche(prise, CASES[l2, c2]));
+                                    else prisesDamesEnCours.Enqueue(new PriseBlanche(p2, adv, CASES[l2, c2], pos2));
                                 }
                             }
+                            else secondPionRencontre = true;
                         }
                     }
                     if (!poursuivie)
-                        prisesEtendues.Enqueue(p2);
+                        prisesDamesEtendues.Add(p2);
                 }
             }
         }
 
-        void prisesDameNoir(byte l1, byte c1)
+        void prisesDameNoir(byte lignePion, byte colPion)
         {
+            Case adv = null;
+            PriseDame p1, p2;
             for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
             {
-                PriseDame prise = null;
-                bool premierPionNonRencontre = true, secondPionNonRencontre = true;
+                p1 = null;
+                bool premierPionRencontre = false, secondPionRencontre = false;
                 bool premiereArrivee = false;
-                for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
-                    l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre;
+                for (byte l2 = getLigneVoisine(lignePion, position), c2 = getColonneVoisine(colPion, position);
+                    l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && !secondPionRencontre;
                     l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
                 {
-                    if (grille[l2, c2] != VIDE)
+                    if (grille[l2, c2] > 0)
                     {
-                        if (premierPionNonRencontre)
+                        if (!premierPionRencontre)
                         {
-                            premierPionNonRencontre = false;
-                            if (grille[l2, c2] > 0
-                                && caseApresSautLibre(l1, c1, l2, c2, position))
-                                prise = new PriseNoire(CASES[l1, c1], CASES[l2, c2]);
-                            else secondPionNonRencontre = false;
+                            premierPionRencontre = true;
+                            adv = CASES[l2, c2];
                         }
-                        else secondPionNonRencontre = false;
+                        else secondPionRencontre = true;
                     }
-                    else if (!premierPionNonRencontre && prise != null)
+                    else if (grille[l2, c2] == 0)
                     {
-                        if (!premiereArrivee)
+                        if (premierPionRencontre)
                         {
-                            prise.cases.Add(CASES[l2, c2]);
-                            premiereArrivee = true;
-                            prisesDamesEnCours.Enqueue(prise);
+                            if (!premiereArrivee)
+                            {
+                                p1 = new PriseNoire(CASES[lignePion, colPion], adv, CASES[l2, c2], position);
+                                premiereArrivee = true;
+                                prisesDamesEnCours.Enqueue(p1);
+                            }
+                            else prisesDamesEnCours.Enqueue(new PriseNoire(p1, CASES[l2, c2]));
+
                         }
-                        else prisesDamesEnCours.Enqueue(new PriseNoire(prise, CASES[l2, c2]));
                     }
+                    else secondPionRencontre = true;
                 }
 
-                while (prisesEnCours.Count > 0)
+                while (prisesDamesEnCours.Count > 0)
                 {
-                    PriseDame p2 = prisesDamesEnCours.Dequeue();
+                    p2 = prisesDamesEnCours.Dequeue();
                     bool poursuivie = false;
-
-                    for (short pos2 = HAUT_GAUCHE; pos2 <= BAS_GAUCHE; pos2++)
+                    int lA = p2.cases[p2.cases.Count - 1].ligne;
+                    int cA = p2.cases[p2.cases.Count - 1].colonne;
+                    int lastDir = p2.lastDir;
+                    foreach (int pos2 in DIRS[lastDir])
                     {
-                        prise = null;
-                        premierPionNonRencontre = secondPionNonRencontre = true;
+                        byte l2 = getLigneVoisine(lA, pos2), c2 = getColonneVoisine(cA, pos2);
+                        premierPionRencontre = false;
+                        secondPionRencontre = false;
                         premiereArrivee = false;
-                        for (byte l2 = getLigneVoisine(l1, position), c2 = getColonneVoisine(c1, position);
-                            l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && secondPionNonRencontre;
-                            l2 = getLigneVoisine(l2, position), c2 = getColonneVoisine(c2, position))
+                        for (; l2 >= 0 && l2 < taille && c2 >= 0 && c2 < taille && !secondPionRencontre;
+                            l2 = getLigneVoisine(l2, pos2), c2 = getColonneVoisine(c2, pos2))
                         {
-                            if (grille[l2, c2] != VIDE)
+                            if (grille[l2, c2] > 0)
                             {
-                                if (premierPionNonRencontre)
+                                if (!premierPionRencontre)
                                 {
-                                    premierPionNonRencontre = false;
-                                    if (grille[l2, c2] > 0 && !p2.pionVirtuellementPris(l2, c2)
-                                        && caseApresSautLibreOuContientPionPreneur(p2, l2, c2, position))
+                                    if (!p2.pionVirtuellementPris(l2, c2))
+                                    {
+                                        premierPionRencontre = true;
+                                        adv = CASES[l2, c2];
+                                    }
+                                    else secondPionRencontre = true;
+                                }
+                                else secondPionRencontre = true;
+                            }
+                            else if (grille[l2, c2] == 0 || (l2 == p2.cases[0].ligne && c2 == p2.cases[0].colonne))
+                            {
+                                if (premierPionRencontre)
+                                {
+                                    if (!premiereArrivee)
                                     {
                                         if (!poursuivie)
                                         {
-                                            p2.cases.Add(CASES[l2, c2]);
+                                            p2.poursuit(adv, CASES[l2, c2], pos2);
+                                            prisesDamesEnCours.Enqueue(p2);
                                             poursuivie = true;
                                         }
-                                        else prise = new PriseNoire(p2, CASES[l2, c2]);
+                                        else prisesDamesEnCours.Enqueue(new PriseNoire(p2, adv, CASES[l2, c2], pos2));
+                                        premiereArrivee = true;
+
                                     }
-                                    else secondPionNonRencontre = false;
-                                }
-                                else secondPionNonRencontre = false;
-                            }
-                            else if (!premierPionNonRencontre && prise != null)
-                            {
-                                if (!premiereArrivee)
-                                {
-                                    if (!poursuivie)
-                                    {
-                                        poursuivie = true;
-                                        p2.cases.Add(CASES[l2, c2]);
-                                    }
-                                    else prise.cases.Add(CASES[l2, c2]);
-                                    premiereArrivee = true;
-                                }
-                                else
-                                {
-                                    if (!poursuivie)
-                                        prisesDamesEnCours.Enqueue(new PriseNoire(p2, CASES[l2, c2]));
-                                    else
-                                        prisesDamesEnCours.Enqueue(new PriseNoire(prise, CASES[l2, c2]));
+                                    else prisesDamesEnCours.Enqueue(new PriseNoire(p2, adv, CASES[l2, c2], pos2));
                                 }
                             }
+                            else secondPionRencontre = true;
                         }
+                        
                     }
                     if (!poursuivie)
-                        prisesEtendues.Enqueue(p2);
+                        prisesDamesEtendues.Add(p2);
                 }
             }
         }
@@ -662,41 +703,15 @@ namespace Assets
         /* Supprime les prises "doublons" : les prises du même pion preneur, prenant les mêmes pions adverses dans le même ordre, se terminant sur la même case, et caractérisées par des cases étapes/intermédiaires différentes. */
         void triePrisesDames()
         {
-            //
-            List<Prise> prises = new List<Prise>();
-            PriseDame p1, p2;
-            for (byte i = 0; i < actionsPossibles.Count; i++)
+            List<PriseDame> prises = new List<PriseDame>();
+            for (int i = 0; i < prisesDamesEtendues.Count - 1; i++)
             {
-                Action p = this.actionsPossibles[i];
-                if (p is PriseDame)
-                {
-                    p1 = (PriseDame)p;
-                    for (byte j = (byte)(actionsPossibles.Count - 1); j > i; j--)
-                    {
-                        p = this.actionsPossibles[j];
-                        if (p is PriseDame)
-                        {
-                            p2 = (PriseDame)p;
-                            if (p1.prendMemePionsMemeOrdre(p2))
-                                prises.RemoveAt(j);
-                        }
-                    }
-                }
+                for (int j = actionsPossibles.Count - 1; j > i; j--)
+                    if (prisesDamesEtendues[i].prendMemePionsMemeOrdre(prisesDamesEtendues[j]))
+                        prises.Add(prisesDamesEtendues[j]);
             }
-        }
-
-        bool caseApresSautLibreOuContientPionPreneur(Prise p, byte l, byte c, short pos)
-        {
-            byte ligne = getLigneVoisine(l, pos), col = getColonneVoisine(c, pos);
-            if (ligne < 0 || ligne >= taille || col < 0 || col >= taille)
-                return false;
-            return grille[ligne, col] == VIDE || (ligne == p.cases[0].ligne && col == p.cases[0].colonne);
-        }
-
-        bool caseApresSautLibre(byte ld, byte cd, byte l, byte c, short pos)
-        {
-            byte ligne = getLigneVoisine(l, pos), col = getColonneVoisine(c, pos);
-            return (ligne >= 0 && ligne < taille) && (col >= 0 && col < taille) && grille[ligne, col] == VIDE;
+            foreach (PriseDame p in prises)
+                prisesDamesEtendues.Remove(p);
         }
 
         const byte ERR = 101;
