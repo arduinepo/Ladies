@@ -12,11 +12,6 @@ namespace Assets
             colonne = c;
         }
 
-        public bool equals(Case c)
-        {
-            return ligne == c.ligne && colonne == c.colonne;
-        }
-
         public override string ToString()
         {
             return ligne + "-" + colonne;
@@ -88,7 +83,7 @@ namespace Assets
 
         public override void realiser(Grille d)
         {
-            d.grille[caseArrivee.ligne, caseArrivee.colonne] = Grille.DAME_BLANC;
+            d.grille[0, caseArrivee.colonne] = Grille.DAME_BLANC;
             d.grille[caseDepart.ligne, caseDepart.colonne] = Grille.VIDE;
             d.nbPionsBlancs--;
             d.nbDamesBlancs++;
@@ -96,7 +91,7 @@ namespace Assets
 
         public override string ToString()
         {
-            return "Pion Blanc : " + base.ToString();
+            return "Arrivee Blanc : " + base.ToString();
         }
     }
 
@@ -153,7 +148,7 @@ namespace Assets
 
         public override string ToString()
         {
-            return "Pion noir : " + base.ToString();
+            return "arrivée noir : " + base.ToString();
         }
     }
     
@@ -179,11 +174,7 @@ namespace Assets
     {
         public List<Case> cases;
         public int lastDir;
-
-        public Prise()
-        {
-            cases = new List<Case>();
-        }
+        public int taille;
 
         public Prise(Case c1, Case c2)
         {
@@ -199,6 +190,14 @@ namespace Assets
             lastDir = p.lastDir;
         }
 
+        public Prise(Prise p, Case c, Case c2, int pos)
+        {
+            cases = new List<Case>(p.cases.GetRange(0, p.cases.Count - 2));
+            cases.Add(c);
+            cases.Add(c2);
+            lastDir = pos;
+        }
+
         public void poursuit(Case c1,Case c2,int pos)
         {
             cases.Add(c1);
@@ -208,7 +207,8 @@ namespace Assets
 
         public int nombrePionsPris()
         {
-            return cases.Count / 2;
+            taille = cases.Count / 2;
+            return taille;
         }
 
         public Case cazArrivee()
@@ -250,10 +250,8 @@ namespace Assets
     public class PriseBlanc : Prise
     {
         
-        public PriseBlanc(Prise p, Case c,Case c2,int pos) : base(p, c)
+        public PriseBlanc(Prise p, Case c,Case c2,int pos) : base(p, c,c2,pos)
         {
-            cases.Add(c2);
-            lastDir = pos;
         }
 
         public PriseBlanc(Case c1, Case c2,Case c3,int pos) : base(c1, c2)
@@ -281,7 +279,7 @@ namespace Assets
             c = cases[cases.Count - 1];
             if (c.ligne == 0)
             {
-                d.grille[c.ligne, c.colonne] = Grille.DAME_BLANC;
+                d.grille[0, c.colonne] = Grille.DAME_BLANC;
                 d.nbPionsBlancs--;
                 d.nbDamesBlancs++;
             }
@@ -298,10 +296,8 @@ namespace Assets
 
     public class PriseNoir : Prise
     {
-        public PriseNoir(Prise p, Case c, Case c2,int pos) : base(p, c)
+        public PriseNoir(Prise p, Case c, Case c2,int pos) : base(p, c,c2,pos)
         {
-            cases.Add(c2);
-            lastDir = pos;
         }
 
         public PriseNoir(Case c1, Case c2, Case c3, int pos) : base(c1, c2)
@@ -357,7 +353,9 @@ namespace Assets
             lastDir = pos;
         }
 
-        public PriseDame() : base() { }
+        public PriseDame(PriseDame p, Case c1, Case c2, int pos) : base(p, c1, c2, pos)
+        {
+        }
 
         public bool prendMemePionsMemeOrdre(PriseDame p2)
         {
@@ -380,14 +378,8 @@ namespace Assets
         {
         }
 
-        public PriseBlanche() : base() { }
-
-        public PriseBlanche(PriseDame p, Case c1,Case c2,int pos) : base()
+        public PriseBlanche(PriseDame p, Case c1,Case c2,int pos) : base(p,c1,c2,pos)
         {
-            cases = new List<Case>(p.cases.GetRange(0, p.cases.Count - 2));
-            cases.Add(c1);
-            cases.Add(c2);
-            lastDir = pos;
         }
 
         public PriseBlanche(Case c1, Case c2,Case c3,int pos) : base(c1, c2,c3,pos)
@@ -427,16 +419,9 @@ namespace Assets
         {
         }
 
-        public PriseNoire() : base()
-        {
-        }
 
-        public PriseNoire(PriseDame p, Case c1, Case c2, int pos) : base()
+        public PriseNoire(PriseDame p, Case c1, Case c2, int pos) : base(p,c1,c2,pos)
         {
-            cases = new List<Case>(p.cases.GetRange(0, p.cases.Count - 2));
-            cases.Add(c1);
-            cases.Add(c2);
-            lastDir = pos;
         }
 
         public PriseNoire(Case c1, Case c2,Case c3,int pos) : base(c1, c2,c3,pos)

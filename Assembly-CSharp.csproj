@@ -56,8 +56,9 @@
     <Analyzer Include="C:\Program Files (x86)\Microsoft Visual Studio Tools for Unity\16.0\Analyzers\Microsoft.Unity.Analyzers.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\IAlphaBeta.cs" />
     <Compile Include="Assets\Action.cs" />
-    <Compile Include="Assets\Etat.cs" />
+    <Compile Include="Assets\Heuristiques.cs" />
     <Compile Include="Assets\TestGrille.cs" />
     <Compile Include="Assets\Damier.cs" />
     <Compile Include="Assets\Grille.cs" />
