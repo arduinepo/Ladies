@@ -10,7 +10,7 @@
     {
         int vPion, vDame;
 
-        public BaseB(int vP,int vD)
+        public BaseB(int vP, int vD)
         {
             vPion = vP;
             vDame = vD;
@@ -25,9 +25,9 @@
         {
             switch (e.resultatBlanc())
             {
-                case -1:return IAlphaBeta.MIN;
-                case 0:return 0;
-                case 1:return IAlphaBeta.MAX;
+                case -1: return IAlphaBeta.MIN;
+                case 0: return 0;
+                case 1: return IAlphaBeta.MAX;
             }
             return 0;
         }
@@ -61,7 +61,5 @@
         }
 
     }
-
-
 
 }

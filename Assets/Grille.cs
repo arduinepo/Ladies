@@ -55,11 +55,11 @@ namespace Assets
             DIRS[BAS_DROIT] = new int[3] { BAS_DROIT, BAS_GAUCHE, HAUT_DROIT }.ToList();
             DIRS[BAS_GAUCHE] = new int[3] { BAS_GAUCHE, HAUT_GAUCHE, BAS_DROIT }.ToList();
 
-            for (byte i = 0; i < 10; i++)
+            for (byte i = 0; i < 10; ++i)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                     CASES[i, j] = new Case(i, j);
 
-            for (byte i = 0; i < 9; i++)
+            for (byte i = 0; i < 9; ++i)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
                     if (i < 8)
@@ -77,7 +77,7 @@ namespace Assets
                             MOUVEMENTS_PIONS[i, j, BAS_DROIT] = new ArriveeNoir(CASES[i, j], CASES[i + 1, j + 1]);
                     }
                 }
-            for (byte i = 1; i < 10; i++)
+            for (byte i = 1; i < 10; ++i)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
                     if (i > 1)
@@ -96,7 +96,7 @@ namespace Assets
                     }
 
                 }
-            for (byte i = 0; i < 10; i++)
+            for (byte i = 0; i < 10; ++i)
                 for (byte j = (byte)(i % 2 == 0 ? 1 : 0); j < 10; j += 2)
                 {
                     MOUVEMENTS_DAMES[i, j, 0] = new Dictionary<int, Mouvement>(20);
@@ -121,17 +121,6 @@ namespace Assets
             tourBlanc = true;
             nbPionsBlancs = nbPionsNoirs = 20;
             nbDamesBlancs = nbDamesNoirs = 0;
-        }
-
-        public Grille(Grille g)
-        {
-            grille = (int[,])g.grille.Clone();
-            taille = g.taille;
-            tourBlanc = g.tourBlanc;
-            nbPionsBlancs = g.nbPionsBlancs;
-            nbPionsNoirs = g.nbPionsNoirs;
-            nbDamesBlancs = g.nbDamesBlancs;
-            nbDamesNoirs = g.nbDamesNoirs;
         }
 
         public Grille(Grille g, Action a)
@@ -219,7 +208,7 @@ namespace Assets
                 return 1;
             genereActionsPossibles();
             if (actionsPossibles.Count == 0)
-                return tourBlanc ?-1:1;
+                return tourBlanc ? -1 : 1;
             return 0;
         }
 
@@ -349,30 +338,6 @@ namespace Assets
                                     actionsPossibles.Add(MOUVEMENTS_DAMES[i, j, 0][ligne * 10 + col]);
                         }
                     }
-
-                /*
-                foreach (Case c in pionsNoirs)
-                {
-                    short pos = BAS_GAUCHE;
-                    byte l = getLigneVoisine(c.ligne, pos), co = getColonneVoisine(c.colonne, pos);
-                    if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
-                            actionsPossibles.Add(MOUVEMENTS_PIONS[l, co, pos]);
-                    pos = BAS_DROIT;
-                    l = getLigneVoisine(c.ligne, pos);
-                    co = getColonneVoisine(c.colonne, pos);
-                    if (l >= 0 && l < taille && co >= 0 && co < taille && grille[l, co] == VIDE)
-                        actionsPossibles.Add(MOUVEMENTS_PIONS[l, co, pos]);
-                }
-                foreach (Case c in damesNoirs)
-                {
-                    for (byte pos = HAUT_GAUCHE; pos <= BAS_GAUCHE; pos++)
-                        for (byte ligne = getLigneVoisine(c.ligne, pos), col = getColonneVoisine(c.colonne, pos);
-                            ligne >= 0 && ligne < taille && col >= 0 && col < taille
-                            && grille[ligne, col] == VIDE; ligne = getLigneVoisine(ligne, pos),
-                                col = getColonneVoisine(col, pos))
-                            actionsPossibles.Add(MOUVEMENTS_DAMES[c.ligne, c.colonne,1][ligne * 10 + col]);
-                }
-                */
             }
         }
 
@@ -424,26 +389,24 @@ namespace Assets
                     }
             }
 
-            for(int i=prisesEtendues.Count-1;i>=0&&prisesEtendues[i].taille==maxPionsPris;i--)
+            for (int i = prisesEtendues.Count - 1; i >= 0 && prisesEtendues[i].taille == maxPionsPris; --i)
                 actionsPossibles.Add(prisesEtendues[i]);
 
             prisesDamesEtendues.RemoveAll(p => p.taille < maxPionsPris);
-            for (int i = prisesDamesEtendues.Count - 1; i > 0; i--)
-                for (int j = i - 1; j >= 0; j--) 
-                {
+            for (int i = prisesDamesEtendues.Count - 1; i > 0; --i)
+                for (int j = i - 1; j >= 0; --j)
                     if (prisesDamesEtendues[i].prendMemePionsMemeOrdre(prisesDamesEtendues[j]))
                     {
                         prisesDamesEtendues.RemoveAt(i);
                         break;
                     }
-                }
             actionsPossibles.AddRange(prisesDamesEtendues);
         }
 
         void prisesPionBlanc(int lignePion, int colonnePion)
         {
             Prise p2;
-            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; ++position)
             {
                 int ligneAdjacente = getLigneVoisine(lignePion, position), colAdjacente = getColonneVoisine(colonnePion, position);
                 if (ligneAdjacente > 0 && ligneAdjacente < taille - 1 && colAdjacente > 0 && colAdjacente < taille - 1 && grille[ligneAdjacente, colAdjacente] < 0)
@@ -484,7 +447,7 @@ namespace Assets
                                 prisesEtendues.Add(p2);
                                 maxPionsPris = p2.taille;
                             }
-                                
+
 
                         }
                     }
@@ -495,7 +458,7 @@ namespace Assets
         void prisesPionNoir(byte lignePion, byte colPion)
         {
             Prise p2;
-            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; ++position)
             {
                 int ligneAdjacente = getLigneVoisine(lignePion, position), colAdjacente = getColonneVoisine(colPion, position);
                 if (ligneAdjacente > 0 && ligneAdjacente < taille - 1 && colAdjacente > 0 && colAdjacente < taille - 1 && grille[ligneAdjacente, colAdjacente] > 0)
@@ -546,7 +509,7 @@ namespace Assets
         {
             Case adv = null;
             PriseDame p1, p2;
-            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; ++position)
             {
                 p1 = null;
                 bool premierPionRencontre = false, secondPionRencontre = false;
@@ -645,7 +608,7 @@ namespace Assets
         {
             Case adv = null;
             PriseDame p1, p2;
-            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; position++)
+            for (short position = HAUT_GAUCHE; position <= BAS_GAUCHE; ++position)
             {
                 p1 = null;
                 bool premierPionRencontre = false, secondPionRencontre = false;
@@ -742,18 +705,6 @@ namespace Assets
         }
 
         const byte ERR = 101;
-
-        Case caseVoisine(Case c, int position)
-        {
-            switch (position)
-            {
-                case (HAUT_GAUCHE): return CASES[c.ligne - 1, c.colonne - 1];
-                case (HAUT_DROIT): return CASES[c.ligne - 1, c.colonne + 1];
-                case (BAS_DROIT): return CASES[c.ligne + 1, c.colonne + 1];
-                case (BAS_GAUCHE): return CASES[c.ligne + 1, c.colonne - 1];
-            }
-            return null;
-        }
 
         static byte getLigneVoisine(int ligne, int position)
         {

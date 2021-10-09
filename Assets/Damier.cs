@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
 
 namespace Assets
 {
@@ -6,7 +7,7 @@ namespace Assets
     {
         CaseSelector[,] cases;
         Grille g;
-        Color gold= new Color(1, 215 / 255.0f, 0), brown = new Color(139 / 255.0f, 69 / 255.0f, 19 / 255.0f);
+        public static Color gold = new Color(1, 215 / 255.0f, 0), brown = new Color(139 / 255.0f, 69 / 255.0f, 19 / 255.0f);
 
         private void Awake()
         {
@@ -56,6 +57,7 @@ namespace Assets
             pion.transform.position = new Vector3(i, 0.1f, j);
             pion.transform.localScale = new Vector3(0.8f, 0.1f, 0.8f);
             cases[i, j].pion = pion;
+            pion.AddComponent<Jump>();
         }
 
         void addDame(int i, int j, bool blanc)
@@ -69,49 +71,34 @@ namespace Assets
             crown.transform.parent = pion.transform;
             crown.GetComponent<Renderer>().material.color = gold;
             crown.transform.localPosition = new Vector3(0, 1, 0);
-            crown.transform.localScale= new Vector3(0.5f, 0.5f, 0.5f);
+            crown.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+            pion.AddComponent<Jump>();
         }
 
-        //montrer exécution de l'action par déplacement en cloche
         public void display(Action a)
         {
             if (a is Mouvement)
             {
                 Mouvement m = (Mouvement)a;
+                Vector3 mi = new Vector3((m.caseDepart.ligne + m.caseArrivee.ligne) / 2, 0.5f, (m.caseDepart.colonne + m.caseArrivee.colonne) / 2);
+                cases[m.caseDepart.ligne, m.caseDepart.colonne].pion.GetComponent<Jump>().set(mi, new Vector3(m.caseArrivee.ligne, 0.1f, m.caseArrivee.colonne));
                 cases[m.caseArrivee.ligne, m.caseArrivee.colonne].pion = cases[m.caseDepart.ligne, m.caseDepart.colonne].pion;
-                cases[m.caseDepart.ligne, m.caseDepart.colonne].pion = null;
-                cases[m.caseArrivee.ligne, m.caseArrivee.colonne].pion.transform.position = new Vector3(m.caseArrivee.ligne, 0.1f, m.caseArrivee.colonne);
                 if (m is ArriveeBlanc || m is ArriveeNoir)
-                {
-                    GameObject crown = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    crown.transform.parent = cases[m.caseArrivee.ligne, m.caseArrivee.colonne].pion.transform;
-                    crown.GetComponent<Renderer>().material.color = gold;
-                    crown.transform.localPosition = new Vector3(0, 1, 0);
-                    crown.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
-                }
+                    cases[m.caseDepart.ligne, m.caseDepart.colonne].pion.GetComponent<Jump>().promDame = true;
             }
             else
             {
                 Prise p = (Prise)a;
+                List<GameObject> pions = new List<GameObject>(p.taille);
                 for (int i = 1; i < p.cases.Count; i += 2)
-                {
-                    GameObject.Destroy(cases[p.cases[i].ligne, p.cases[i].colonne].pion);
-                    cases[p.cases[i].ligne, p.cases[i].colonne].pion = null;
-                }
+                    pions.Add(cases[p.cases[i].ligne, p.cases[i].colonne].pion);
                 Case arr = p.cases[p.cases.Count - 1];
+                if ((p is PriseNoir && arr.ligne == g.taille - 1) || (p is PriseBlanc && arr.ligne == 0))
+                    cases[p.cases[0].ligne, p.cases[0].colonne].pion.GetComponent<Jump>().promDame = true;
+                cases[p.cases[0].ligne, p.cases[0].colonne].pion.GetComponent<Jump>().set(p, pions);
                 cases[arr.ligne, arr.colonne].pion = cases[p.cases[0].ligne, p.cases[0].colonne].pion;
-                cases[arr.ligne, arr.colonne].pion.transform.position = new Vector3(arr.ligne, 0.1f, arr.colonne);
-                if ((p is PriseNoir && arr.ligne == g.taille-1) || (p is PriseBlanc && arr.ligne == 0))
-                {
-                    GameObject crown = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    crown.transform.parent = cases[arr.ligne, arr.colonne].pion.transform;
-                    crown.GetComponent<Renderer>().material.color = gold;
-                    crown.transform.localPosition = new Vector3(0, 1, 0);
-                    crown.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
-                }
             }
         }
-
 
     }
 
@@ -132,12 +119,106 @@ namespace Assets
 
         private void Update()
         {
-            if (Input.GetMouseButtonDown(0)&& coll.Raycast(Camera.main.ScreenPointToRay(Input.mousePosition), out hit, 1000.0f))
+            if (Input.GetMouseButtonDown(0) && coll.Raycast(Camera.main.ScreenPointToRay(Input.mousePosition), out hit, 1000.0f))
                 Jeu.jeuEnCours.selectCase(ligne, colonne);
         }
 
     }
 
-    
+    public class Jump : MonoBehaviour
+    {
+        Vector3 p0, p1, p2;
+        Vector3[] points;
+        bool jump = false;
+        int pos = 0;
+        static float step;
+        Prise p;
+        List<GameObject> pions;
+        int cur = 0;
+        public bool promDame = false;
+
+        void Awake()
+        {
+            p0 = transform.position;
+            
+        }
+
+        public void set(Vector3 p15, Vector3 p3)
+        {
+            p1 = new Vector3((p0.x + p15.x) / 2, p15.y, (p0.z + p15.z) / 2);
+            p2 = new Vector3((p3.x + p15.x) / 2, p15.y, (p3.z + p15.z) / 2);
+            if (step == 0.0f)
+            {
+                step = Time.smoothDeltaTime * 5.0f;
+            }
+            float s = step, minus = 1.0f - s;
+            points = new Vector3[(int)(1.0f / step)];
+            float sqMinus = minus * minus, sqS = s * s;
+            for (int i = 0; i < points.Length - 1; i++, s += step, minus -= step, sqMinus = minus * minus, sqS = s * s)
+                points[i] = p0 * (sqMinus * minus) + 3 * p1 * (s * sqMinus) + 3 * p2 * (sqS * minus) + p3 * (sqS * s);
+            points[points.Length - 1] = p3;
+            jump = true;
+        }
+
+        public void set(Prise p, List<GameObject> pions)
+        {
+            this.p = p;
+            this.pions = pions;
+            set(new Vector3(p.cases[cur * 2 + 1].ligne, 0.5f, p.cases[cur * 2 + 1].colonne), new Vector3(p.cases[cur * 2 + 2].ligne, 0.1f, p.cases[cur * 2 + 2].colonne));
+        }
+
+        void FixedUpdate()
+        {
+            if (jump)
+            {
+                transform.position = points[pos++];
+                if (pos == points.Length)
+                {
+                    pos = 0;
+                    p0 = transform.position;
+                    if (p != null)
+                    {
+                        GameObject.Destroy(pions[cur++]);
+                        if (cur < p.taille)
+                            set(new Vector3(p.cases[cur * 2 + 1].ligne, 0.5f, p.cases[cur * 2 + 1].colonne), new Vector3(p.cases[cur * 2 + 2].ligne, 0.1f, p.cases[cur * 2 + 2].colonne));
+                        else
+                        {
+                            if (promDame)
+                            {
+                                addCrown();
+                                promDame = false;
+                            }
+                            p = null;
+                            pions = null;
+                            jump = false;
+                            cur = 0;
+                            Jeu.jeuEnCours.displayEnded = true;
+                        }
+                    }
+                    else
+                    {
+                        if (promDame)
+                        {
+                            addCrown();
+                            promDame = false;
+                        }
+                        jump = false;
+                        Jeu.jeuEnCours.displayEnded = true;
+                    }
+                }
+            }
+        }
+
+        void addCrown()
+        {
+            GameObject crown = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            crown.transform.parent = transform;
+            crown.GetComponent<Renderer>().material.color = Damier.gold;
+            crown.transform.localPosition = new Vector3(0, 1, 0);
+            crown.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+            promDame = false;
+        }
+
+    }
 
 }

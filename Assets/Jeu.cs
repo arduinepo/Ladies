@@ -9,6 +9,7 @@ namespace Assets
         public Grille g;
         public Damier d;
         Case depart, c2;
+        public bool tourIA = false, displayEnded = false;
 
         void Awake()
         {
@@ -18,44 +19,67 @@ namespace Assets
             c2 = null;
             d = GameObject.FindGameObjectWithTag("Damier").GetComponent<Damier>();
             g = new Grille();
-            j1 = new IAlphaBeta(g, new BaseN(1, 3), 9);
+            j1 = new IAlphaBeta(g, this, new BaseN(1, 3), 9);
             d.initDisplay(g);
             g.genereActionsPossibles();
         }
 
-        private void Update()
+        void Update()
         {
-            if (depart != null && c2 != null)
+            if (!tourIA && depart != null && c2 != null)
             {
                 Action a = g.realiseActionCases(depart, c2);
                 if (a != null)
                 {
                     d.display(a);
+                    displayEnded = false;
+                    tourIA = true;
                     if (g.partieFinie())
-                    {
                         switch (g.resultatBlanc())
                         {
                             case -1: Debug.Log("DEFAITE"); break;
                             case 0: Debug.Log("NUL"); break;
                             case 1: Debug.Log("VICTOIRE"); break;
                         }
-                    }
-                    else
-                    {
-                        depart = c2 = null;
-                        d.display(g.realiserAction(j1.choisirAction()));
-                        if (g.partieFinie())
-                        {
-                            switch (g.resultatBlanc())
-                            {
-                                case -1: Debug.Log("DEFAITE"); break;
-                                case 0: Debug.Log("NUL"); break;
-                                case 1: Debug.Log("VICTOIRE"); break;
-                            }
-                        }
-                    }
+                    else j1.choisitAction();
                 }
                 depart = c2 = null;
+            }
+            if (tourIA && !IAlphaBeta.recherche.IsAlive && displayEnded)
+            {
+                d.display(g.realiserAction(IAlphaBeta.todo));
+                displayEnded = false;
+                tourIA = false;
+                if (g.partieFinie())
+                {
+                    switch (g.resultatBlanc())
+                    {
+                        case -1: Debug.Log("DEFAITE"); break;
+                        case 0: Debug.Log("NUL"); break;
+                        case 1: Debug.Log("VICTOIRE"); break;
+                    }
+                }
+                IAlphaBeta.todo = null;
+            }
+        }
+
+        public void actionne(Action a)
+        {
+            if (tourIA  && displayEnded)
+            {
+                d.display(g.realiserAction(IAlphaBeta.todo));
+                displayEnded = false;
+                tourIA = false;
+                if (g.partieFinie())
+                {
+                    switch (g.resultatBlanc())
+                    {
+                        case -1: Debug.Log("DEFAITE"); break;
+                        case 0: Debug.Log("NUL"); break;
+                        case 1: Debug.Log("VICTOIRE"); break;
+                    }
+                }
+                IAlphaBeta.todo = null;
             }
         }
 
@@ -72,29 +96,27 @@ namespace Assets
     public abstract class Joueur
     {
         protected Grille g;
+        protected Jeu j;
 
-        public Joueur(Grille g)
+        public Joueur(Grille g, Jeu jeu)
         {
             this.g = g;
+            j = jeu;
         }
 
-        public abstract Action choisirAction();
-
+        public abstract void choisitAction();
 
     }
 
     public class JoueurAléatoire : Joueur
     {
-        public JoueurAléatoire(Grille g) : base(g) { }
+        public JoueurAléatoire(Grille g, Jeu j) : base(g, j) { }
 
-        public override Action choisirAction()
+        public override void choisitAction()
         {
-            return g.actionsPossibles[(int)(Random.value * g.actionsPossibles.Count)];
+            j.actionne(g.actionsPossibles[(int)(Random.value * g.actionsPossibles.Count)]);
         }
 
-
     }
-
-
 
 }
